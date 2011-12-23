@@ -17,6 +17,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.geoserver.catalog.ResourcePool.DataStoreLoader;
 import org.geoserver.catalog.util.ReaderUtils;
 import org.geoserver.config.GeoServer;
 import org.geoserver.config.GeoServerInfo;
@@ -28,6 +29,8 @@ import org.geotools.feature.NameImpl;
 import org.opengis.feature.Feature;
 import org.opengis.feature.type.FeatureType;
 import org.w3c.dom.Element;
+
+import com.google.common.cache.RemovalNotification;
 
 /**
  * Tests for {@link ResourcePool}.
@@ -129,14 +132,15 @@ public class ResourcePoolTest extends GeoServerTestSupport {
             @SuppressWarnings("serial")
             public ResourcePool2(Catalog catalog) {
                 super(catalog);
-                dataStoreCache = new DataStoreCache() {
+                DataStoreLoader loader = new DataStoreLoader() {
                     @SuppressWarnings("unchecked")
                     @Override
-                    protected void dispose(String name, DataAccess dataStore) {
+                    public void onRemoval(RemovalNotification<String, DataAccess> notification) {
                         disposeCalled = true;
-                        super.dispose(name, dataStore);
+                        super.onRemoval(notification);
                     }
                 };
+                dataStoreCache = newCache(loader, loader, null);
             }
         }
 
@@ -194,7 +198,8 @@ public class ResourcePoolTest extends GeoServerTestSupport {
         gs.save(global);
 
         Catalog catalog = getCatalog();
-        assertEquals(200, catalog.getResourcePool().featureTypeCache.getHardReferencesCount());
+        fail("not applicable anymore, re-write to add more than the set capacity and check the cache size is the set capacity"); 
+        // assertEquals(200, catalog.getResourcePool().featureTypeCache.getHardReferencesCount());
     }
     
     public void testDropCoverageStore() throws Exception {

@@ -15,6 +15,10 @@
  <name>Main Module</name>
  
  <dependencies>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
   <dependency>
    <groupId>org.geoserver</groupId>
    <artifactId>ows</artifactId>
