@@ -35,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.annotation.Nullable;
+
 import org.apache.commons.io.IOUtils;
 import org.eclipse.xsd.XSDElementDeclaration;
 import org.eclipse.xsd.XSDParticle;
@@ -101,9 +103,9 @@ import org.vfny.geoserver.global.GeoserverDataDirectory;
 import org.vfny.geoserver.util.DataStoreUtils;
 
 import com.google.common.base.Throwables;
-import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.cache.RemovalNotification;
 
@@ -156,13 +158,13 @@ public class ResourcePool {
     private static final String IMAGE_MOSAIC = "ImageMosaic";
 
     Catalog catalog;
-    Cache<String, CoordinateReferenceSystem> crsCache;
-    Cache<String, DataAccess> dataStoreCache;
-    Cache<FeatureTypeKey, FeatureType> featureTypeCache;
-    Cache<String, List<AttributeTypeInfo>> featureTypeAttributeCache;
-    Cache<String, WebMapServer> wmsCache;
-    Cache<CoverageHintReaderKey, GridCoverageReader> coverageReaderCache;
-    Cache<StyleInfo,Style> styleCache;
+    LoadingCache<String, CoordinateReferenceSystem> crsCache;
+    LoadingCache<String, DataAccess> dataStoreCache;
+    LoadingCache<FeatureTypeKey, FeatureType> featureTypeCache;
+    LoadingCache<String, List<AttributeTypeInfo>> featureTypeAttributeCache;
+    LoadingCache<String, WebMapServer> wmsCache;
+    LoadingCache<CoverageHintReaderKey, GridCoverageReader> coverageReaderCache;
+    LoadingCache<StyleInfo,Style> styleCache;
     List<Listener> listeners;
     ThreadPoolExecutor coverageExecutor;
     CatalogRepository repository;
@@ -200,27 +202,37 @@ public class ResourcePool {
     /**
      * Right now only maxCapacity is configurable, but read/write expiration time, initial capacity,
      * whether to use soft or weak references, and concurrency level can be made configurable
+     * 
+     * @param loader
+     *            the object responsible of loading objects for the returned cache upon cache
+     *            misses.
+     * @param removalListener
+     *            the object that performs further clean up when an object is evicted from the
+     *            cache, may be {@code null}.
+     * @param maxCapacity
+     *            the maximum capacity of the cache, may be {@code null} for unbounded.
+     * @return a cache that loads missing objects from the provided cache loader
      */
-    protected <K, V> Cache<K, V> newCache(CacheLoader<K, V> loader,
-            RemovalListener<K, V> removalListener, Integer maxCapacity) {
+    protected <K, V> LoadingCache<K, V> newCache(CacheLoader<K, V> loader,
+            @Nullable RemovalListener<K, V> removalListener, @Nullable Integer maxCapacity) {
 
         CacheBuilder<Object, Object> builder = CacheBuilder.newBuilder();
         // optimize partition table to N concurrent writer threads
         builder.concurrencyLevel(10);
 
         // LRU expiration time
-        builder.expireAfterAccess(10, TimeUnit.MINUTES);
-        
+        builder.expireAfterAccess(60, TimeUnit.MINUTES);
+
         // only one of expireAfterAccess or expireAfterWrite can be set
-        //builder.expireAfterWrite(10, TimeUnit.MINUTES);
-        
+        // builder.expireAfterWrite(10, TimeUnit.MINUTES);
+
         builder.initialCapacity(10);
         if (maxCapacity != null) {
             builder.maximumSize(maxCapacity);
         }
         builder.softValues();
 
-        if(removalListener != null){
+        if (removalListener != null) {
             builder.removalListener(removalListener);
         }
         return builder.build(loader);
@@ -322,6 +334,11 @@ public class ResourcePool {
         return factory;
     }
     
+    /**
+     * DataStore loader for the {@link ResourcePool#dataStoreCache}. To be registered also as the
+     * cache's removal listener for DataStore disposal upon entry eviction.
+     * 
+     */
     class DataStoreLoader 
             extends CacheLoader<String, DataAccess> 
             implements RemovalListener<String, DataAccess> {
@@ -402,6 +419,13 @@ public class ResourcePool {
             return dataStore;
         }
 
+        /**
+         * When a data store is evicted from the cache, fires a
+         * {@link ResourcePool#fireDisposed(DataStoreInfo, DataAccess) disposed} event and then
+         * {@link DataAccess#dispose() disposes} the data store.
+         * 
+         * @see com.google.common.cache.RemovalListener#onRemoval(com.google.common.cache.RemovalNotification)
+         */
         @Override
         public void onRemoval(RemovalNotification<String, DataAccess> notification) {
             
@@ -1290,6 +1314,10 @@ public class ResourcePool {
         }
     }
     
+    /**
+     * Loader and removal listener for the {@link ResourcePool#featureTypeCache}
+     * 
+     */
     private class FeatureTypeLoader extends CacheLoader<FeatureTypeKey, FeatureType> implements
             RemovalListener<FeatureTypeKey, FeatureType> {
 
@@ -1446,6 +1474,10 @@ public class ResourcePool {
 
     }
     
+    /**
+     * Loader and removal listener for the {@link ResourcePool#coverageReaderCache}
+     * 
+     */
     private class CoverageReaderLoader extends CacheLoader<CoverageHintReaderKey, GridCoverageReader>
             implements RemovalListener<CoverageHintReaderKey, GridCoverageReader> {
 
@@ -1509,6 +1541,10 @@ public class ResourcePool {
         }
     }
     
+    /**
+     * Loader and removal listener for the {@link ResourcePool#featureTypeAttributeCache}
+     * 
+     */
     class FeatureTypeAttributeLoader extends CacheLoader<String, List<AttributeTypeInfo>> {
 
         @Override
@@ -1566,6 +1602,10 @@ public class ResourcePool {
 
     }
 
+    /**
+     * Loader and removal listener for the {@link ResourcePool#styleCache}
+     * 
+     */
     private class StyleLoader extends CacheLoader<StyleInfo, Style>{
 
         @Override
