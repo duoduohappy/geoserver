@@ -142,15 +142,25 @@ public class FeatureTypeResource extends AbstractCatalogResource {
             boolean virtual = mdm != null && mdm.containsKey(FeatureTypeInfo.JDBC_VIRTUAL_TABLE);
 
             if(!virtual && !typeExists) {
-                gtds.createSchema(buildFeatureType(featureType));
-                // the attributes created might not match up 1-1 with the actual spec due to
-                // limitations of the data store, have it re-compute them
-                featureType.getAttributes().clear();
-                List<String> typeNames = Arrays.asList(gtds.getTypeNames());
-                // handle Oracle oddities
-                // TODO: use the incoming store capabilites API to better handle the name transformation
-                if(!typeNames.contains(typeName) && typeNames.contains(typeName.toUpperCase())) {
-                    featureType.setNativeName(featureType.getName().toLowerCase());
+                if( typeExists ){
+                    if( gtds instanceof ContentDataStore){
+                        // flush schema information to force refresh from database or header
+                        ContentDataStore contentDataStore = (ContentDataStore) gtds;
+                        ContentFeatureSource featureSource = contentDataStore.getFeatureSource(typeName,  Transaction.AUTO_COMMIT);
+                        featureSource.getState().flush(); // clear cached Feature type
+                    }                    
+                }
+                else {
+                    gtds.createSchema(buildFeatureType(featureType));
+                    // the attributes created might not match up 1-1 with the actual spec due to
+                    // limitations of the data store, have it re-compute them
+                    featureType.getAttributes().clear();
+                    List<String> typeNames = Arrays.asList(gtds.getTypeNames());
+                    // handle Oracle oddities
+                    // TODO: use the incoming store capabilites API to better handle the name transformation
+                    if(!typeNames.contains(typeName) && typeNames.contains(typeName.toUpperCase())) {
+                        featureType.setNativeName(featureType.getName().toLowerCase());
+                    }
                 }
             }
         }
