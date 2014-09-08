@@ -61,6 +61,10 @@
     </context-param>
     
     <filter>
+      <filter-name>hazelcast</filter-name>
+      <filter-class>org.geoserver.cluster.hazelcast.web.HzSessionShareFilter</filter-class>
+    </filter>
+    <filter>
      <filter-name>FlushSafeFilter</filter-name>
      <filter-class>org.geoserver.filters.FlushSafeFilter</filter-class>
     </filter>
@@ -152,6 +156,10 @@
      -->
    </filter>
 
+    <filter-mapping>
+      <filter-name>hazelcast</filter-name>
+      <url-pattern>/*</url-pattern>
+    </filter-mapping>
     <!-- 
       THIS FILTER MUST BE THE FIRST ONE, otherwise we end up with ruined chars in the input from the GUI
       See the "Note" in the Tomcat character encoding guide:
@@ -205,6 +213,11 @@
       <url-pattern>/*</url-pattern>
     </filter-mapping>
     
+    <!-- hazelcast session listener -->
+    <listener>
+      <listener-class>org.geoserver.cluster.hazelcast.web.HzSessionShareListener</listener-class>
+    </listener>
+
     <!-- general initializer, should be first thing to execute -->
     <listener>
       <listener-class>org.geoserver.GeoserverInitStartupListener</listener-class>

@@ -1052,6 +1052,16 @@
         </dependency>
       </dependencies>
     </profile>
+    <profile>
+      <id>cluster</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.opengeo.geoserver</groupId>
+          <artifactId>cluster</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
  </profiles>
 
 </project>
