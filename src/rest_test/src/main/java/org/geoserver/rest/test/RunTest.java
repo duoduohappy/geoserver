@@ -2,6 +2,7 @@ package org.geoserver.rest.test;
 
 import static org.restlet.data.ChallengeScheme.HTTP_BASIC;
 
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -9,6 +10,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.restlet.Response;
 import org.restlet.data.MediaType;
@@ -26,11 +29,11 @@ import com.google.common.collect.Iterators;
 public class RunTest {
 
     private static final List<String> BASE_URLS = ImmutableList.of(//
-            "http://hal:8080/geoserver/rest/",//
-            "http://laptop:8080/geoserver/rest/");
+            "http://eva01:8081/geoserver/rest/",//
+            "http://eva01:8082/geoserver/rest/");
 
     private final Iterator<String> roundRobbinUrls = Iterators.cycle(BASE_URLS);
-    
+
     public static void main(String args[]) {
         try {
             new RunTest().run();
@@ -56,8 +59,8 @@ public class RunTest {
                 public void run() {
                     final int index = count.incrementAndGet();
                     final String wsName = createWorkspace(index);
-//                    final String dsName = createDataStore(wsName, index);
-//                    final String ftName = createFeatureTypeAndLayer(wsName, dsName, index);
+                    final String dsName = createDataStore(wsName, index);
+                    final String ftName = createFeatureTypeAndLayer(wsName, dsName, index);
 
                     // try {
                     // Thread.sleep(200);
@@ -65,13 +68,17 @@ public class RunTest {
                     // e.printStackTrace();
                     // return;
                     // }
-//
-//                    modifyFeatureType(wsName, dsName, ftName);
-//
-//                    delete("layers/" + ftName + ".xml");
-//                    delete("workspaces/" + wsName + "/datastores/" + dsName + "/featuretypes/"
-//                            + ftName + ".xml");
-//                    delete("workspaces/" + wsName + "/datastores/" + dsName + ".xml");
+
+                    verifyFeatureType(wsName, dsName, ftName, 23);
+                    modifyFeatureType(wsName, dsName, ftName);
+                    verifyFeatureType(wsName, dsName, ftName, 1);
+                    addFeatureTypeAttribute(wsName, dsName, ftName);
+                    verifyFeatureType(wsName, dsName, ftName, 2);
+
+                    delete("layers/" + ftName + ".xml");
+                    delete("workspaces/" + wsName + "/datastores/" + dsName + "/featuretypes/"
+                            + ftName + ".xml");
+                    delete("workspaces/" + wsName + "/datastores/" + dsName + ".xml");
                     delete("workspaces/" + wsName + ".xml");
 
                 }
@@ -113,17 +120,80 @@ public class RunTest {
         return ftName;
     }
 
+    private void verifyFeatureType(final String wsName, final String dsName, final String ftName,
+            final int expectedAttributeCount) {
+        final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
+                + "/featuretypes/" + ftName + ".xml";
+        for (int i = 0; i < BASE_URLS.size(); i++) {
+            final ClientResource client = newClient(relativePath);
+            client.getRequest().setResourceRef(relativePath);
+
+            try {
+                Representation representation = client.get();
+                Status status = client.getResponse().getStatus();
+
+                Reference targetRef = client.getRequest().getResourceRef().getTargetRef();
+                System.out.println("GET " + targetRef + ": " + status);
+                StringWriter writer = new StringWriter();
+                representation.write(writer);
+                String stringRep = writer.toString();
+                Pattern p = Pattern.compile("<attribute>");
+                Matcher m = p.matcher(stringRep);
+                int count = 0;
+                while (m.find()) {
+                    count += 1;
+                }
+                if (expectedAttributeCount != count) {
+                    System.err.println(String.format("Expected %d attributes, got %d:\n%s\n",
+                            expectedAttributeCount, count, stringRep));
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void addFeatureTypeAttribute(String wsName, String dsName, String ftName) {
+        final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
+                + "/featuretypes/" + ftName + ".xml";
+
+        final String ftXml = "<featureType>\n"
+                + "  <name>"
+                + ftName
+                + "</name>\n"//
+                + "  <nativeName>states</nativeName>\n"//
+                + "  <title>States "
+                + ftName
+                + " + modified</title>\n"//
+                + "  <srs>EPSG:4326</srs>\n"//
+                + "  <attributes>"//
+                + "     <attribute><name>state_fips</name><binding>java.lang.String</binding></attribute>"
+                + "     <attribute><name>geom</name><binding>com.vividsolutions.jts.geom.MultiPolygon</binding></attribute>"//
+                + "  </attributes>"//
+                + "</featureType>\n";
+        putXml(relativePath, ftXml);
+    }
+
     private void modifyFeatureType(final String wsName, final String dsName, final String ftName) {
 
         final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
                 + "/featuretypes/" + ftName + ".xml";
 
-        final String ftXml = "<featureType>\n" + //
-                "  <name>" + ftName + "</name>\n" + //
-                "  <nativeName>states</nativeName>\n" + //
-                "  <title>States " + ftName + " + modified</title>\n" + //
-                "  <srs>EPSG:4326</srs>\n" + //
-                "</featureType>\n";
+        final String ftXml = "<featureType>\n"
+                + "  <name>"
+                + ftName
+                + "</name>\n"//
+                + "  <nativeName>states</nativeName>\n"//
+                + "  <title>States "
+                + ftName
+                + " + modified</title>\n"//
+                + "  <srs>EPSG:4326</srs>\n"//
+                + "  <attributes>"//
+                + "     <attribute>"//
+                + "             <name>geom</name><minOccurs>0</minOccurs><maxOccurs>1</maxOccurs><nillable>true</nillable><binding>com.vividsolutions.jts.geom.MultiPolygon</binding>"
+                + "     </attribute>"//
+                + "  </attributes>"//
+                + "</featureType>\n";
         putXml(relativePath, ftXml);
     }
 
