@@ -2007,14 +2007,16 @@ public class ResourcePool {
             clear(style);
         }
         
-        /**
-         * Flush the data store associated with a feature type in case the underlying schema has
-         * changed.
-         * @param ft
-         */
-        protected void flushDataStore(FeatureTypeInfo ft){
-            DataStoreInfo ds = ft.getStore();
-            
+    }
+    
+    /**
+     * Flush the data store associated with a feature type in case the underlying schema has
+     * changed.
+     * @param ft
+     */
+    protected void flushDataStore(FeatureTypeInfo ft){
+        DataStoreInfo ds = ft.getStore();
+        if( ds != null) {
             List<FeatureTypeInfo> siblings = catalog.getFeatureTypesByDataStore(ds);
             if( siblings.size() == 0 ){
                 // clean up cached DataAccess if no longer in use
@@ -2043,6 +2045,7 @@ public class ResourcePool {
             }
         }
     }
+    
     /**
      * Used to clean up any outstanding data store listeners.
      * <p>
