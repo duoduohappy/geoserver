@@ -2,8 +2,10 @@ package org.geoserver.rest.test;
 
 import static org.restlet.data.ChallengeScheme.HTTP_BASIC;
 
+import java.io.IOException;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -29,8 +31,11 @@ import com.google.common.collect.Iterators;
 public class RunTest {
 
     private static final List<String> BASE_URLS = ImmutableList.of(//
-            "http://eva01:8081/geoserver/rest/",//
-            "http://eva01:8082/geoserver/rest/");
+            "http://eva01:8081/geoserver/",//
+            "http://eva01:8082/geoserver/",//
+            "http://eva01:8083/geoserver/",//
+            "http://eva01:8084/geoserver/"//
+    );
 
     private final Iterator<String> roundRobbinUrls = Iterators.cycle(BASE_URLS);
 
@@ -52,7 +57,7 @@ public class RunTest {
 
         final AtomicInteger count = new AtomicInteger();
 
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100; i++) {
             executor.submit(new Runnable() {
 
                 @Override
@@ -70,16 +75,23 @@ public class RunTest {
                     // }
 
                     verifyFeatureType(wsName, dsName, ftName, 23);
-                    modifyFeatureType(wsName, dsName, ftName);
-                    verifyFeatureType(wsName, dsName, ftName, 1);
-                    addFeatureTypeAttribute(wsName, dsName, ftName);
-                    verifyFeatureType(wsName, dsName, ftName, 2);
+                    verifyDescribeFeatureType(wsName, dsName, ftName, 23);
 
-                    delete("layers/" + ftName + ".xml");
-                    delete("workspaces/" + wsName + "/datastores/" + dsName + "/featuretypes/"
+                    modifyFeatureType(wsName, dsName, ftName);
+
+                    verifyFeatureType(wsName, dsName, ftName, 1);
+                    verifyDescribeFeatureType(wsName, dsName, ftName, 1);
+
+                    addFeatureTypeAttribute(wsName, dsName, ftName);
+
+                    verifyFeatureType(wsName, dsName, ftName, 2);
+                    verifyDescribeFeatureType(wsName, dsName, ftName, 2);
+
+                    delete("rest/layers/" + ftName + ".xml");
+                    delete("rest/workspaces/" + wsName + "/datastores/" + dsName + "/featuretypes/"
                             + ftName + ".xml");
-                    delete("workspaces/" + wsName + "/datastores/" + dsName + ".xml");
-                    delete("workspaces/" + wsName + ".xml");
+                    delete("rest/workspaces/" + wsName + "/datastores/" + dsName + ".xml");
+                    delete("rest/workspaces/" + wsName + ".xml");
 
                 }
             });
@@ -108,7 +120,7 @@ public class RunTest {
     private String createFeatureTypeAndLayer(final String wsName, final String dsName,
             final int index) {
         final String ftName = "states-" + index;
-        final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
+        final String relativePath = "rest/workspaces/" + wsName + "/datastores/" + dsName
                 + "/featuretypes";
         final String ftXml = "<featureType>\n" + //
                 "  <name>" + ftName + "</name>\n" + //
@@ -120,9 +132,53 @@ public class RunTest {
         return ftName;
     }
 
+    private void verifyDescribeFeatureType(final String wsName, final String dsName,
+            final String ftName, final int expectedAttributeCount) {
+
+        for (String version : Arrays.asList("1.0.0")) {
+
+            String relativePath = "ows?service=WFS&version=" + version
+                    + "&request=DescribeFeatureType&typeName=" + wsName + ":" + ftName;
+            for (int i = 0; i < BASE_URLS.size(); i++) {
+                final ClientResource client = newClient(relativePath);
+                client.getRequest().setResourceRef(relativePath);
+                client.setRetryOnError(false);
+                Reference targetRef = client.getRequest().getResourceRef().getTargetRef();
+                Representation representation;
+                try {
+                    representation = client.get();
+                } catch (Exception e) {
+                    System.out.println("ERROR GET " + targetRef + ": " + e.getMessage());
+                    continue;
+                }
+                Status status = client.getResponse().getStatus();
+
+                System.out.println("GET " + targetRef + ": " + status);
+                StringWriter writer = new StringWriter();
+                try {
+                    representation.write(writer);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    continue;
+                }
+                String stringRep = writer.toString();
+                Pattern p = Pattern.compile("maxOccurs");
+                Matcher m = p.matcher(stringRep);
+                int count = 0;
+                while (m.find()) {
+                    count += 1;
+                }
+                if (expectedAttributeCount != count) {
+                    System.err.println(String.format("Expected %d attributes, got %d:\n%s\n",
+                            expectedAttributeCount, count, stringRep));
+                }
+            }
+        }
+    }
+
     private void verifyFeatureType(final String wsName, final String dsName, final String ftName,
             final int expectedAttributeCount) {
-        final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
+        final String relativePath = "rest/workspaces/" + wsName + "/datastores/" + dsName
                 + "/featuretypes/" + ftName + ".xml";
         for (int i = 0; i < BASE_URLS.size(); i++) {
             final ClientResource client = newClient(relativePath);
@@ -154,7 +210,7 @@ public class RunTest {
     }
 
     private void addFeatureTypeAttribute(String wsName, String dsName, String ftName) {
-        final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
+        final String relativePath = "rest/workspaces/" + wsName + "/datastores/" + dsName
                 + "/featuretypes/" + ftName + ".xml";
 
         final String ftXml = "<featureType>\n"
@@ -166,6 +222,7 @@ public class RunTest {
                 + ftName
                 + " + modified</title>\n"//
                 + "  <srs>EPSG:4326</srs>\n"//
+                + "  <enabled>true</enabled>\n"//
                 + "  <attributes>"//
                 + "     <attribute><name>state_fips</name><binding>java.lang.String</binding></attribute>"
                 + "     <attribute><name>geom</name><binding>com.vividsolutions.jts.geom.MultiPolygon</binding></attribute>"//
@@ -176,7 +233,7 @@ public class RunTest {
 
     private void modifyFeatureType(final String wsName, final String dsName, final String ftName) {
 
-        final String relativePath = "workspaces/" + wsName + "/datastores/" + dsName
+        final String relativePath = "rest/workspaces/" + wsName + "/datastores/" + dsName
                 + "/featuretypes/" + ftName + ".xml";
 
         final String ftXml = "<featureType>\n"
@@ -188,6 +245,7 @@ public class RunTest {
                 + ftName
                 + " + modified</title>\n"//
                 + "  <srs>EPSG:4326</srs>\n"//
+                + "  <enabled>true</enabled>\n"//
                 + "  <attributes>"//
                 + "     <attribute>"//
                 + "             <name>geom</name><minOccurs>0</minOccurs><maxOccurs>1</maxOccurs><nillable>true</nillable><binding>com.vividsolutions.jts.geom.MultiPolygon</binding>"
@@ -210,7 +268,7 @@ public class RunTest {
                 "  <dbtype>postgis</dbtype>\n" + //
                 " </connectionParameters>\n" + //
                 "</dataStore>";
-        final String relativePath = "workspaces/" + wsName + "/datastores";
+        final String relativePath = "rest/workspaces/" + wsName + "/datastores";
 
         postXml(relativePath, dsxml);
         return dsName;
@@ -219,7 +277,7 @@ public class RunTest {
     private String createWorkspace(final int index) {
         final String wsName = "ws-" + index;
         final String wsxml = "<workspace><name>" + wsName + "</name></workspace>";
-        postXml("workspaces", wsxml);
+        postXml("rest/workspaces", wsxml);
         return wsName;
     }
 
