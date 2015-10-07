@@ -21,12 +21,12 @@ import java.util.List;
 import org.apache.commons.io.IOUtils;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.Resource.Type;
-import org.hamcrest.Matchers;
 import org.junit.Rule;
 import org.junit.experimental.theories.Theories;
 import org.junit.experimental.theories.Theory;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
+
 
 /**
  * JUnit Theory test class for Resource invariants. Subclasses should provide representative 
@@ -87,7 +87,7 @@ public abstract class ResourceTheoryTest {
     public void theoryHaveName(String path) throws Exception {
         Resource res = getResource(path);
         
-        String result = res.path();
+        String result = res.name();
         
         assertThat(result, notNullValue());
     }
@@ -112,7 +112,11 @@ public abstract class ResourceTheoryTest {
         
         InputStream result = res.in();
         
-        assertThat(result, notNullValue());
+        try {
+            assertThat(result, notNullValue());
+        } finally {
+            result.close();
+        }
     }
     
     @Theory
@@ -122,30 +126,43 @@ public abstract class ResourceTheoryTest {
         assumeThat(res, is(resource()));
         
         OutputStream result = res.out();
-        
-        assertThat(result, notNullValue());
+        try {
+            assertThat(result, notNullValue());
+        } finally {
+            result.close();
+        }
     }
     
     @Theory
-    public void theoryUndefinedHaveIstream(String path) throws Exception {
+    public void theoryUndefinedHaveIstreamAndBecomeResource(String path) throws Exception {
         Resource res = getResource(path);
         
         assumeThat(res, is(undefined()));
         
         InputStream result = res.in();
         
-        assertThat(result, notNullValue());
+        try {
+            assertThat(result, notNullValue());
+            assertThat(res, is(resource()));
+        } finally {
+            result.close();
+        }
     }
     
     @Theory
-    public void theoryUndefinedHaveOstream(String path) throws Exception {
+    public void theoryUndefinedHaveOstreamAndBecomeResource(String path) throws Exception {
         Resource res = getResource(path);
         
         assumeThat(res, is(undefined()));
         
         OutputStream result = res.out();
         
-        assertThat(result, notNullValue());
+        try {
+            assertThat(result, notNullValue());
+            assertThat(res, is(resource()));
+        } finally {
+            result.close();
+        }
     }
     
     @Theory
@@ -181,7 +198,7 @@ public abstract class ResourceTheoryTest {
         assumeThat(res, is(directory()));
         
         exception.expect(IllegalStateException.class);
-        res.in();
+        res.in().close();
     }
     
     @Theory
@@ -190,7 +207,7 @@ public abstract class ResourceTheoryTest {
         assumeThat(res, is(directory()));
         
         exception.expect(IllegalStateException.class);
-        res.out();
+        res.out().close();
     }
     
     @Theory

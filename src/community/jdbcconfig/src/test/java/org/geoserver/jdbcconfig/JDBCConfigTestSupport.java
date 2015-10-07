@@ -28,6 +28,7 @@ import org.geoserver.config.util.XStreamPersisterInitializer;
 import org.geoserver.jdbcconfig.internal.ConfigDatabase;
 import org.geoserver.jdbcconfig.internal.DbMappings;
 import org.geoserver.jdbcconfig.internal.Dialect;
+import org.geoserver.jdbcconfig.internal.JDBCConfigProperties;
 import org.geoserver.jdbcconfig.internal.JDBCConfigXStreamPersisterInitializer;
 import org.geoserver.jdbcconfig.internal.Util;
 import org.geoserver.jdbcconfig.internal.XStreamInfoSerialBinding;
@@ -301,9 +302,9 @@ public class JDBCConfigTestSupport {
     }
 
     public void runScript(String dbScriptName, Logger logger, boolean tx) throws IOException {
-        final URL url = JDBCGeoServerLoader.class.getResource(dbScriptName);
+        final URL url = JDBCConfigProperties.class.getResource(dbScriptName);
         if (url == null) {
-            throw new IllegalArgumentException("Script not found: " + getClass().getName() + "/"
+            throw new IllegalArgumentException("Script not found: " + JDBCConfigProperties.class.getName() + "/"
                     + dbScriptName);
         }
 
