@@ -29,6 +29,12 @@ public abstract class AbstractJDBCResourceStoreTest {
         expect(config.isInitDb()).andStubReturn(init);
         expect(config.isEnabled()).andStubReturn(enabled);
         expect(config.isImport()).andStubReturn(init);
+        config.setInitDb(false);        
+        expectLastCall();
+        try {
+            config.save();      
+        } catch (Exception e) {}
+        expectLastCall();
         support.stubConfig(config);
         replay(config);
         return config;

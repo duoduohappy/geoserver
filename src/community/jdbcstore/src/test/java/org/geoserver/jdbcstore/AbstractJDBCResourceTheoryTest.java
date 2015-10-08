@@ -101,6 +101,11 @@ public abstract class AbstractJDBCResourceTheoryTest extends ResourceTheoryTest 
         //disabled
     }
     
+    @Override
+    public void theoryDirectoriesHaveFileWithSameNamedChildren(String path) throws Exception {
+        //disabled
+    }
+    
     @Theory
     public void theoryModifiedUpdated(String path) throws Exception {
         Resource res = getResource(path);

@@ -76,7 +76,7 @@ public class PostgresTestSupport implements DatabaseTestSupport {
     public void initialize() throws Exception  {
         NamedParameterJdbcTemplate template = new NamedParameterJdbcTemplate(ds);
         
-        Util.runScript(JDBCResourceStore.class.getResource("init.postgres.sql"), template.getJdbcOperations(), null);
+        Util.runScript(JDBCResourceStoreProperties.class.getResource("init.postgres.sql"), template.getJdbcOperations(), null);
 
     }
     

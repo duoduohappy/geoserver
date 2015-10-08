@@ -1,6 +1,7 @@
 package org.geoserver.jdbcstore;
 
 import org.junit.Before;
+import org.junit.Ignore;
 
 public class PostgresJDBCResourceStoreTest extends AbstractJDBCResourceStoreTest{
     
