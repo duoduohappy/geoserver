@@ -304,6 +304,10 @@ public class JDBCDirectoryStructure {
         return new Entry(path);        
     }
     
+    public JDBCResourceStoreProperties getConfig() {
+        return config;
+    }
+    
     // ------------------------------ private helper methods & classes
             
     private boolean deleteChildren(Integer oid) {

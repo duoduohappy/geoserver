@@ -10,6 +10,8 @@ import java.io.InputStream;
 import java.sql.ResultSet;
 
 import org.geoserver.jdbcstore.internal.JDBCResourceStoreProperties;
+import org.geoserver.platform.resource.DataDirectoryResourceStore;
+import org.geoserver.platform.resource.FileSystemResourceStore;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.ResourceStore;
 import org.junit.After;
@@ -29,6 +31,7 @@ public abstract class AbstractJDBCResourceStoreTest {
         expect(config.isInitDb()).andStubReturn(init);
         expect(config.isEnabled()).andStubReturn(enabled);
         expect(config.isImport()).andStubReturn(init);
+        expect(config.getIgnoreDirs()).andStubReturn(new String[] {"DirIgnore"});
         config.setInitDb(false);        
         expectLastCall();
         try {
@@ -213,6 +216,18 @@ public abstract class AbstractJDBCResourceStoreTest {
             in.close();
         }
         
+    }
+    
+    @Test
+    public void testIgnoreDir() throws Exception {
+        JDBCResourceStoreProperties config = getConfig(true, false);
+        
+        ResourceStore dataDirStore = new DataDirectoryResourceStore();
+        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config,
+                dataDirStore);
+                
+        assertEquals(store.get("DirIgnore"), dataDirStore.get("DirIgnore"));
+        assertNotEquals(store.get("DirDontIgnore"), dataDirStore.get("DirDontIgnore"));
     }
 
 }

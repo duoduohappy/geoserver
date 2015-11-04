@@ -41,17 +41,13 @@ public class JDBCResourceStore implements ResourceStore {
     
     private static final Logger LOGGER = org.geotools.util.logging.Logging.getLogger(JDBCResourceStore.class);
     
-    /**
-     * Excluded directories from copy to jdbcstore on import.
-     */
-    private final String[] EXCLUDES = {"jdbcstore", "workspaces", "layergroups", "temp", "tmp"};
-    
     /** LockProvider used to secure resources for exclusive access */
     //TODO: clustering supported lock mechanism
     protected LockProvider lockProvider = new NullLockProvider();
             
     protected JDBCDirectoryStructure dir;    
     protected ResourceCache cache;
+    protected ResourceStore oldResourceStore;
     
     public void setCache(ResourceCache cache) {
         this.cache = cache;
@@ -76,13 +72,14 @@ public class JDBCResourceStore implements ResourceStore {
     
     public JDBCResourceStore(DataSource ds, JDBCResourceStoreProperties config, ResourceStore oldResourceStore) {
         this(ds, config);
+        this.oldResourceStore = oldResourceStore;
         
-        if (config.isImport() && oldResourceStore != null) {
+        if (config.isImport()) {
             if (oldResourceStore != null) {
                 try {
                     Resource root = oldResourceStore.get("");
                     for (Resource child : root.list()) {
-                        if  (!ArrayUtils.contains(EXCLUDES, child.name())) {
+                        if  (!ArrayUtils.contains(config.getIgnoreDirs(), child.name())) {
                             Resources.copy(child, get(child.name()));
                         }
                     }
@@ -99,6 +96,9 @@ public class JDBCResourceStore implements ResourceStore {
     
     @Override
     public Resource get(String path) {
+        if (oldResourceStore != null && ArrayUtils.contains(dir.getConfig().getIgnoreDirs(), path)) {
+            return oldResourceStore.get(path);
+        }
         return new JDBCResource(dir.createEntry(path));
     }
         

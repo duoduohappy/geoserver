@@ -25,4 +25,8 @@ public class JDBCResourceStoreProperties extends JDBCLoaderProperties {
     public boolean isDeleteDestinationOnRename() {
         return Boolean.valueOf(getProperty("deleteDestinationOnRename", "false"));
     }
+    
+    public String[] getIgnoreDirs() {
+        return getProperty("ignoreDirs", "").split(",");
+    }
 }
