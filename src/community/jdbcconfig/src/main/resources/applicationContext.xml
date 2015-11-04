@@ -21,11 +21,11 @@
   </bean>
 
   <!-- transaction manager -->
-  <bean id="txManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+  <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
     <property name="dataSource" ref="jdbcConfigDataSource" />
   </bean>
 
-  <tx:annotation-driven transaction-manager="txManager" />
+  <tx:annotation-driven transaction-manager="transactionManager" />
 
   <bean id="jdbcPersistenceBinding" class="org.geoserver.jdbcconfig.internal.XStreamInfoSerialBinding">
     <constructor-arg ref="xstreamPersisterFactory" />

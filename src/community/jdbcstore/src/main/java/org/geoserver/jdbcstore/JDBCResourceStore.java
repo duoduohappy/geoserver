@@ -44,7 +44,7 @@ public class JDBCResourceStore implements ResourceStore {
     /**
      * Excluded directories from copy to jdbcstore on import.
      */
-    private final String[] EXCLUDES = {"jdbcstore", "workspaces", "temp", "tmp"};
+    private final String[] EXCLUDES = {"jdbcstore", "workspaces", "layergroups", "temp", "tmp"};
     
     /** LockProvider used to secure resources for exclusive access */
     //TODO: clustering supported lock mechanism
