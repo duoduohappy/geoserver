@@ -12,6 +12,7 @@ import java.sql.ResultSet;
 import org.geoserver.jdbcstore.internal.JDBCResourceStoreProperties;
 import org.geoserver.platform.resource.DataDirectoryResourceStore;
 import org.geoserver.platform.resource.FileSystemResourceStore;
+import org.geoserver.platform.resource.NullLockProvider;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.ResourceStore;
 import org.junit.After;
@@ -81,8 +82,8 @@ public abstract class AbstractJDBCResourceStoreTest {
         
         JDBCResourceStoreProperties config = getConfig(true, false);
         
-        @SuppressWarnings("unused")
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         {
             // Check that the database has a resource table with a root record
             
@@ -115,8 +116,8 @@ public abstract class AbstractJDBCResourceStoreTest {
 
         JDBCResourceStoreProperties config = getConfig(true, true);
         
-        @SuppressWarnings("unused")
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         {
             // Check that the database has a resource table with a root record
             
@@ -138,7 +139,8 @@ public abstract class AbstractJDBCResourceStoreTest {
         
         JDBCResourceStoreProperties config = getConfig(true, false);
         
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         
         Resource r = store.get("FileA");
         
@@ -153,7 +155,8 @@ public abstract class AbstractJDBCResourceStoreTest {
         
         JDBCResourceStoreProperties config = getConfig(true, false);
         
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         
         Resource r = store.get("DirE");
         
@@ -169,7 +172,8 @@ public abstract class AbstractJDBCResourceStoreTest {
         
         JDBCResourceStoreProperties config = getConfig(true, false);
         
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         
         Resource r = store.get("DoesntExist");
         
@@ -185,7 +189,8 @@ public abstract class AbstractJDBCResourceStoreTest {
         
         JDBCResourceStoreProperties config = getConfig(true, false);
         
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         
         Resource r = store.get("DirC/DirF/DirG/FileH");
         
@@ -200,7 +205,8 @@ public abstract class AbstractJDBCResourceStoreTest {
         
         JDBCResourceStoreProperties config = getConfig(true, false);
         
-        ResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        JDBCResourceStore store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         
         Resource r = store.get("FileA");
         

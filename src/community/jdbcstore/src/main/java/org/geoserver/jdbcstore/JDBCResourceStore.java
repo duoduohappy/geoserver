@@ -29,6 +29,9 @@ import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.ResourceListener;
 import org.geoserver.platform.resource.ResourceStore;
 import org.geoserver.platform.resource.Resources;
+import org.springframework.beans.factory.InitializingBean;
+
+import com.google.common.base.Preconditions;
 
 /**
  * Implementation of ResourceStore backed by a JDBC DirectoryStructure.
@@ -42,7 +45,6 @@ public class JDBCResourceStore implements ResourceStore {
     private static final Logger LOGGER = org.geotools.util.logging.Logging.getLogger(JDBCResourceStore.class);
     
     /** LockProvider used to secure resources for exclusive access */
-    //TODO: clustering supported lock mechanism
     protected LockProvider lockProvider = new NullLockProvider();
             
     protected JDBCDirectoryStructure dir;    
@@ -53,6 +55,11 @@ public class JDBCResourceStore implements ResourceStore {
         this.cache = cache;
     }
        
+
+    LockProvider getLockProvider() {
+        return lockProvider;
+    }
+    
    /**
     * Configure LockProvider used during {@link Resource#out()}.
     * 
@@ -317,4 +324,5 @@ public class JDBCResourceStore implements ResourceStore {
             }
         }
     }
+
 }

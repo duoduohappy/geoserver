@@ -4,6 +4,7 @@ import static org.easymock.classextension.EasyMock.*;
 
 import org.geoserver.jdbcstore.cache.SimpleResourceCache;
 import org.geoserver.jdbcstore.internal.JDBCResourceStoreProperties;
+import org.geoserver.platform.resource.NullLockProvider;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -31,6 +32,7 @@ public class PostgresJDBCResourceTheoryTest extends AbstractJDBCResourceTheoryTe
         replay(config);
         
         store = new JDBCResourceStore(support.getDataSource(), config);
+        store.setLockProvider(new NullLockProvider());
         store.setCache(new SimpleResourceCache(folder.getRoot()));
     }
 }
