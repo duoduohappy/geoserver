@@ -68,6 +68,7 @@
           <descriptor>release/ext-gdal-wcs.xml</descriptor>
           <descriptor>release/ext-gdal-wps.xml</descriptor>
           <descriptor>release/ext-wps-jdbc.xml</descriptor>
+	  <descriptor>release/ext-geogig.xml</descriptor>
           <descriptor>release/ext-vectortiles.xml</descriptor>
         </descriptors>
       </configuration>
@@ -165,6 +166,12 @@
       </modules>
     </profile>
     <profile>
+        <id>geogig</id>
+        <modules>
+            <module>geogig</module>
+        </modules>
+    </profile>
+    <profile>
       <id>communityRelease</id>
       <modules>
         <module>authkey</module>
@@ -197,6 +204,7 @@
 	<module>jdbcstore</module>
 	<module>gdal</module>
 	<module>gwc-s3</module>
+    <module>geogig</module>
       </modules>
     </profile>
     <profile>
