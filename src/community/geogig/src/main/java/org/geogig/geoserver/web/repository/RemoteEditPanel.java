@@ -84,7 +84,7 @@ public class RemoteEditPanel extends Panel {
 
             @Override
             protected void onError(AjaxRequestTarget target, Form<?> form) {
-                target.addComponent(feedback);
+                target.add(feedback);
             }
 
             @Override
@@ -95,7 +95,7 @@ public class RemoteEditPanel extends Panel {
                     table.add(newRemote);
                 }
                 parentWindow.close(target);
-                target.addComponent(table);
+                target.add(table);
             }
         });
 
@@ -105,7 +105,7 @@ public class RemoteEditPanel extends Panel {
             @Override
             public void onClick(AjaxRequestTarget target) {
                 parentWindow.close(target);
-                target.addComponent(table);
+                target.add(table);
             }
         });
     }

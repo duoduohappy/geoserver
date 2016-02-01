@@ -95,7 +95,7 @@ public abstract class RepositoryEditFormPanel extends Panel {
             @Override
             protected void onError(AjaxRequestTarget target, Form<?> form) {
                 super.onError(target, form);
-                target.addComponent(form);
+                target.add(form);
             }
 
             @Override
@@ -105,7 +105,7 @@ public abstract class RepositoryEditFormPanel extends Panel {
                     onSave(repoInfo, target);
                 } catch (IllegalArgumentException e) {
                     form.error(e.getMessage());
-                    target.addComponent(form);
+                    target.add(form);
                 }
             }
         });
@@ -161,7 +161,7 @@ public abstract class RepositoryEditFormPanel extends Panel {
             geogig = manager.getRepository(repoInfo.getId());
         } catch (IOException e) {
             form.error("Unable to connect to repository " + repoInfo.getLocation());
-            target.addComponent(form);
+            target.add(form);
             return;
         }
 
@@ -186,7 +186,7 @@ public abstract class RepositoryEditFormPanel extends Panel {
                     tx.abort();
                 } finally {
                     form.error(e.getMessage());
-                    target.addComponent(form);
+                    target.add(form);
                 }
                 return;
             }

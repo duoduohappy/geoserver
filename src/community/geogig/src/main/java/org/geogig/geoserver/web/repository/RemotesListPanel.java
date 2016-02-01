@@ -10,7 +10,6 @@ import java.util.Comparator;
 import java.util.List;
 
 import org.apache.wicket.Component;
-import org.apache.wicket.ResourceReference;
 import org.apache.wicket.ajax.AjaxRequestTarget;
 import org.apache.wicket.extensions.ajax.markup.html.modal.ModalWindow;
 import org.apache.wicket.extensions.markup.html.repeater.util.SortParam;
@@ -21,6 +20,8 @@ import org.apache.wicket.markup.repeater.DefaultItemReuseStrategy;
 import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
 import org.apache.wicket.model.ResourceModel;
+import org.apache.wicket.request.resource.PackageResourceReference;
+import org.apache.wicket.request.resource.ResourceReference;
 import org.geogig.geoserver.config.RepositoryManager;
 import org.geoserver.web.GeoServerBasePage;
 import org.geoserver.web.wicket.GeoServerDataProvider;
@@ -37,7 +38,7 @@ public class RemotesListPanel extends GeoServerTablePanel<RemoteInfo> {
 
     private static final long serialVersionUID = 5957961031378924960L;
 
-    private static final ResourceReference removeIcon = new ResourceReference(
+    private static final ResourceReference removeIcon = new PackageResourceReference(
             GeoServerBasePage.class, "img/icons/silk/delete.png");
 
     private ModalWindow popupWindow;
@@ -75,9 +76,8 @@ public class RemotesListPanel extends GeoServerTablePanel<RemoteInfo> {
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     @Override
-    protected Component getComponentForProperty(String id, IModel itemModel,
+    protected Component getComponentForProperty(String id, IModel<RemoteInfo> itemModel,
             Property<RemoteInfo> property) {
-
         IModel<RemoteInfo> model = itemModel;
 
         if (property == RemotesProvider.NAME) {
@@ -177,9 +177,9 @@ public class RemotesListPanel extends GeoServerTablePanel<RemoteInfo> {
 
         private static final long serialVersionUID = 4883560661021761394L;
 
-        static final Property<RemoteInfo> NAME = new BeanProperty<>("name", "name");
+        static final Property<RemoteInfo> NAME = new BeanProperty<RemoteInfo>("name", "name");
 
-        static final Property<RemoteInfo> URL = new BeanProperty<>("URL", "URL");
+        static final Property<RemoteInfo> URL = new BeanProperty<RemoteInfo>("URL", "URL");
 
         static final Property<RemoteInfo> PINGLINK = new AbstractProperty<RemoteInfo>("") {
             private static final long serialVersionUID = 1L;

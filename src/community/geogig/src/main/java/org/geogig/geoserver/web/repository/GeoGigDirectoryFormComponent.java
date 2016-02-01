@@ -58,7 +58,7 @@ class GeoGigDirectoryFormComponent extends FormComponentPanel<String> {
     }
 
     @Override
-    protected void convertInput() {
+    public void convertInput() {
         String uri = directory.getConvertedInput();
         setConvertedInput(uri);
     }
@@ -94,7 +94,7 @@ class GeoGigDirectoryFormComponent extends FormComponentPanel<String> {
                         directory.clearInput();
                         directory.setModelObject(file.getAbsolutePath());
 
-                        target.addComponent(directory);
+                        target.add(directory);
                         dialog.close(target);
                     };
 
@@ -102,7 +102,7 @@ class GeoGigDirectoryFormComponent extends FormComponentPanel<String> {
                     protected void directorySelected(File file, AjaxRequestTarget target) {
                         directory.clearInput();
                         directory.setModelObject(file.getAbsolutePath());
-                        target.addComponent(directory);
+                        target.add(directory);
                         dialog.close(target);
                     }
                 };

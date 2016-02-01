@@ -56,19 +56,19 @@ public class RepositoryEditPanel extends FormComponentPanel<RepositoryInfo> {
                 RepositoryInfo repo = validatable.getValue();
                 final File parent = new File(repo.getParentDirectory());
                 if (!parent.exists() || !parent.isDirectory()) {
-                    error.addMessageKey("errParentDoesntExist");
+                    error.addKey("errParentDoesntExist");
                 }
                 if (!parent.canWrite()) {
-                    error.addMessageKey("errParentReadOnly");
+                    error.addKey("errParentReadOnly");
                 }
                 String uri = repo.getLocation();
                 File repoDir = new File(uri);
                 if (isNew) {
                     if (repoDir.exists()) {
-                        error.addMessageKey("errDirectoryExists");
+                        error.addKey("errDirectoryExists");
                     }
                 } else if (!isGeogigDirectory(repoDir)) {
-                    error.addMessageKey("notAGeogigRepository");
+                    error.addKey("notAGeogigRepository");
                 }
                 if (!error.getKeys().isEmpty()) {
                     validatable.error(error);
@@ -78,7 +78,7 @@ public class RepositoryEditPanel extends FormComponentPanel<RepositoryInfo> {
     }
 
     @Override
-    protected void convertInput() {
+    public void convertInput() {
         RepositoryInfo modelObject = getModelObject();
         setConvertedInput(modelObject);
     }
