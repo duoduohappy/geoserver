@@ -63,6 +63,36 @@
     </context-param>
     
     <filter>
+       <filter-name>hazelcast-filter</filter-name>
+       <filter-class>com.hazelcast.web.WebFilter</filter-class>
+       <!-- 
+           Name of the distributed map storing
+           your web session objects
+       -->
+       <init-param>
+           <param-name>map-name</param-name>
+           <param-value>geoserver-sessions</param-value>
+       </init-param>
+       <!-- How is your load-balancer configured? stick-session
+    means all requests of a session is routed to the node where the session is
+    first created. This is excellent for performance. If sticky-session is set to
+    false, when a session is updated on a node, entry for this session on all other
+    nodes is invalidated. You have to know how your load-balancer is configured
+    before setting this parameter. Default is true. -->
+       <init-param>
+           <param-name>sticky-session</param-name>
+           <param-value>false</param-value>
+       </init-param>
+       <!--
+           Are you debugging? Default is false.
+       -->
+       <init-param>
+           <param-name>debug</param-name>
+           <param-value>true</param-value>
+       </init-param>
+    </filter>
+
+    <filter>
      <filter-name>FlushSafeFilter</filter-name>
      <filter-class>org.geoserver.filters.FlushSafeFilter</filter-class>
     </filter>
@@ -154,6 +184,13 @@
      -->
    </filter>
 
+    <filter-mapping>
+       <filter-name>hazelcast-filter</filter-name>
+       <url-pattern>/*</url-pattern>
+       <dispatcher>FORWARD</dispatcher>
+       <dispatcher>INCLUDE</dispatcher>
+       <dispatcher>REQUEST</dispatcher>
+    </filter-mapping>
     <!-- 
       THIS FILTER MUST BE THE FIRST ONE, otherwise we end up with ruined chars in the input from the GUI
       See the "Note" in the Tomcat character encoding guide:
@@ -207,6 +244,9 @@
       <url-pattern>/*</url-pattern>
     </filter-mapping>
     
+    <listener>
+       <listener-class>com.hazelcast.web.SessionListener</listener-class>
+    </listener>
     <!-- general initializer, should be first thing to execute -->
     <listener>
       <listener-class>org.geoserver.GeoserverInitStartupListener</listener-class>
