@@ -18,7 +18,7 @@
     <geogig.version>1.1-SNAPSHOT</geogig.version>
     <jline.version>2.12</jline.version>
     <mockito.version>1.8.5</mockito.version>
-    <logback.version>1.1.2</logback.version>
+    <logback.version>1.1.11</logback.version> <!-- note 1.1.11 depends on slf4j 1.7.22, which is the same version declared in geosever's root pom. Make sure they stay in sycn -->
     <cucumber-java.version>1.2.4</cucumber-java.version>
   </properties>
 
