@@ -93,7 +93,7 @@ class RepositoryCache {
     public Repository get(final String repositoryId) throws IOException {
         try {
             return repoCache.get(repositoryId);
-        } catch (ExecutionException e) {
+        } catch (Throwable e) {
             Throwables.propagateIfInstanceOf(e.getCause(), IOException.class);
             throw new IOException("Error obtaining cached geogig instance for repo " + repositoryId,
                     e.getCause());

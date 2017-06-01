@@ -124,6 +124,7 @@ public class RepositoryManager implements GeoServerInitializer {
         this.resourceStore = resourceStore;
         this.repoCache = new RepositoryCache(this);
         this.configStore.addRepositoryInfoChangedCallback(REPO_CHANGED_CALLBACK);
+        this.configStore.setEventLock(this);
     }
 
     @Override
@@ -132,16 +133,16 @@ public class RepositoryManager implements GeoServerInitializer {
         setCatalog(geoServer.getCatalog());
     }
 
-    public List<RepositoryInfo> getAll() {
+    public synchronized List<RepositoryInfo> getAll() {
         return configStore.getRepositories();
     }
 
-    public void invalidate(final String repoId) {
+    public synchronized void invalidate(final String repoId) {
         this.repoCache.invalidate(repoId);
     }
 
     @Nullable
-    public Repository createRepo(final Hints hints) {
+    public synchronized Repository createRepo(final Hints hints) {
         // get the Config store location
         // only generate a location if no URI is set in the hints
         URI repoURI;
@@ -175,7 +176,7 @@ public class RepositoryManager implements GeoServerInitializer {
         return repository;
     }
 
-    public RepositoryInfo get(final String repoId) throws IOException {
+    public synchronized RepositoryInfo get(final String repoId) throws IOException {
         try {
             return configStore.get(repoId);
         } catch (FileNotFoundException e) {
@@ -183,7 +184,7 @@ public class RepositoryManager implements GeoServerInitializer {
         }
     }
 
-    public RepositoryInfo getByRepoName(final String name) {
+    public synchronized RepositoryInfo getByRepoName(final String name) {
     	RepositoryInfo info = configStore.getByName(name);
         if (info != null) {
         	return info;
@@ -192,15 +193,15 @@ public class RepositoryManager implements GeoServerInitializer {
         throw new NoSuchElementException("No repository with ID " + name + " exists");
     }
 
-    public List<DataStoreInfo> findGeogigStores() {
+    public synchronized  List<DataStoreInfo> findGeogigStores() {
         return findGeogigStores(this.catalog);
     }
 
-    public Catalog getCatalog() {
+    public synchronized Catalog getCatalog() {
         return this.catalog;
     }
 
-    public void setCatalog(Catalog catalog) {
+    public synchronized void setCatalog(Catalog catalog) {
         this.catalog = catalog;
     }
 
@@ -219,7 +220,7 @@ public class RepositoryManager implements GeoServerInitializer {
         return geogigStores;
     }
 
-    public List<DataStoreInfo> findDataStores(final String repoId) {
+    public synchronized List<DataStoreInfo> findDataStores(final String repoId) {
         // get the name
         String repoName = null;
         try {
@@ -239,7 +240,7 @@ public class RepositoryManager implements GeoServerInitializer {
         return dependent;
     }
 
-    public List<? extends CatalogInfo> findDependentCatalogObjects(final String repoId) {
+    public synchronized List<? extends CatalogInfo> findDependentCatalogObjects(final String repoId) {
         List<DataStoreInfo> stores = findDataStores(repoId);
         List<CatalogInfo> dependent = new ArrayList<>(stores);
         for (DataStoreInfo dataStore : stores) {
@@ -253,14 +254,14 @@ public class RepositoryManager implements GeoServerInitializer {
         return dependent;
     }
 
-    public List<LayerInfo> findLayers(DataStoreInfo store) {
+    public synchronized List<LayerInfo> findLayers(DataStoreInfo store) {
         Filter filter = equal("resource.store.id", store.getId());
         try (CloseableIterator<LayerInfo> it = this.catalog.list(LayerInfo.class, filter)) {
             return Lists.newArrayList(it);
         }
     }
 
-    public List<FeatureTypeInfo> findFeatureTypes(DataStoreInfo store) {
+    public synchronized List<FeatureTypeInfo> findFeatureTypes(DataStoreInfo store) {
         Filter filter = equal("store.id", store.getId());
         try (CloseableIterator<FeatureTypeInfo> it = this.catalog.list(FeatureTypeInfo.class,
                 filter)) {
@@ -277,7 +278,7 @@ public class RepositoryManager implements GeoServerInitializer {
         return isGeogigDirectory;
     }
 
-    private void handleRepoRename(RepositoryInfo oldRepo, RepositoryInfo newRepo) {
+    private synchronized void handleRepoRename(RepositoryInfo oldRepo, RepositoryInfo newRepo) {
         if (Objects.equal(oldRepo.getId(), newRepo.getId())) {
             // repos have the same ID, check the names
             final String oldName = oldRepo.getRepoName();
@@ -295,7 +296,7 @@ public class RepositoryManager implements GeoServerInitializer {
         }
     }
 
-    public RepositoryInfo save(RepositoryInfo info) {
+    public synchronized RepositoryInfo save(RepositoryInfo info) {
         Preconditions.checkNotNull(info.getLocation());
         if (info.getId() == null) {
             create(info);
@@ -314,7 +315,7 @@ public class RepositoryManager implements GeoServerInitializer {
         return configStore.save(info);
     }
 
-    private void create(final RepositoryInfo repoInfo) {
+    private synchronized void create(final RepositoryInfo repoInfo) {
         URI repoURI = repoInfo.getLocation();
         RepositoryResolver resolver = RepositoryResolver.lookup(repoURI);
         if (!resolver.repoExists(repoURI)) {
@@ -332,18 +333,18 @@ public class RepositoryManager implements GeoServerInitializer {
         }
     }
 
-    public List<Ref> listBranches(final String repositoryId) throws IOException {
+    public synchronized List<Ref> listBranches(final String repositoryId) throws IOException {
         Repository geogig = getRepository(repositoryId);
         List<Ref> refs = geogig.command(BranchListOp.class).call();
         return refs;
     }
 
-    public Repository getRepository(String repositoryId) throws IOException {
+    public synchronized Repository getRepository(String repositoryId) throws IOException {
         Repository repository = repoCache.get(repositoryId);
         return repository;
     }
 
-    public void delete(final String repoId) {
+    public synchronized void delete(final String repoId) {
         List<DataStoreInfo> repoStores = findDataStores(repoId);
         CascadeDeleteVisitor deleteVisitor = new CascadeDeleteVisitor(this.catalog);
         for (DataStoreInfo storeInfo : repoStores) {
@@ -356,7 +357,7 @@ public class RepositoryManager implements GeoServerInitializer {
         }
     }
 
-    RepositoryInfo findOrCreateByLocation(final URI repositoryURI) {
+    synchronized RepositoryInfo findOrCreateByLocation(final URI repositoryURI) {
     	RepositoryInfo info = configStore.getByLocation(repositoryURI);
     	if (info != null) {
     		return info;
