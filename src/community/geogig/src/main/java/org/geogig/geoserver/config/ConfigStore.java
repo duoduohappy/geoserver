@@ -16,19 +16,20 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
+import org.eclipse.jdt.annotation.Nullable;
 import org.geoserver.platform.resource.Paths;
 import org.geoserver.platform.resource.Resource;
 import org.geoserver.platform.resource.ResourceListener;
@@ -38,7 +39,6 @@ import org.geoserver.platform.resource.ResourceNotificationDispatcher;
 import org.geoserver.platform.resource.ResourceStore;
 import org.geotools.util.logging.Logging;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
@@ -66,6 +66,10 @@ public class ConfigStore {
 
     private static final Logger LOGGER = Logging.getLogger(ConfigStore.class);
 
+    public static interface RepositoryInfoChangedCallback {
+        public void repositoryInfoChanged(String repoId);
+    }
+
     /**
      * Regex pattern to assert the format of ids on {@link #save(RepositoryInfo)}
      */
@@ -80,11 +84,6 @@ public class ConfigStore {
 
     private Queue<RepositoryInfoChangedCallback> callbacks;
 
-    /**
-     * Map of cached {@link RepositoryInfo} instances key'ed by id
-     */
-    private ConcurrentMap<String, RepositoryInfo> cache = new ConcurrentHashMap<>();
-
     public ConfigStore(ResourceStore resourceLoader) {
         checkNotNull(resourceLoader, "resourceLoader");
         this.resourceLoader = resourceLoader;
@@ -93,7 +92,6 @@ public class ConfigStore {
         }
         this.lock = new ReentrantReadWriteLock();
         this.callbacks = new ConcurrentLinkedQueue<RepositoryInfoChangedCallback>();
-        populateCache();
 
         ResourceNotificationDispatcher dispatcher = resourceLoader
                 .getResourceNotificationDispatcher();
@@ -113,17 +111,11 @@ public class ConfigStore {
                     case ENTRY_MODIFY:
                         System.out.println("ENTRY_MODIFY EVENT - " + event + ", on THREAD="
                                 + Thread.currentThread().getName());
-                        cache.remove(repoId);
-                        loadResource(resourceLoader.get(path));
-                        System.out.println("ENTRY_MODIFY :: finished load - " + event
-                                + ", on THREAD=" + Thread.currentThread().getName());
-
                         repositoryInfoChanged(repoId);
                         break;
                     case ENTRY_DELETE:
                         System.out.println("ENTRY_DELETE EVENT - " + event + ", on THREAD="
                                 + Thread.currentThread().getName());
-                        cache.remove(repoId);
                         repositoryInfoChanged(repoId);
                         break;
                     }
@@ -171,7 +163,6 @@ public class ConfigStore {
         Resource resource = resource(info.getId());
         try (OutputStream out = resource.out()) {
             getConfigredXstream().toXML(info, new OutputStreamWriter(out, Charsets.UTF_8));
-            cache.put(info.getId(), info);
         } catch (IOException e) {
             throw Throwables.propagate(e);
         } finally {
@@ -185,7 +176,6 @@ public class ConfigStore {
         checkIdFormat(id);
         lock.writeLock().lock();
         try {
-            cache.remove(id);
             return resource(id).delete();
         } finally {
             lock.writeLock().unlock();
@@ -225,28 +215,15 @@ public class ConfigStore {
         return resourceName.substring(0, resourceName.length() - 4);
     }
 
-    @VisibleForTesting
-    void populateCache() {
-        cache.clear();
-        Resource configRoot = getConfigRoot();
-        List<Resource> list = configRoot.list();
-        if (null == list) {
-            return;
-        }
-        Iterator<Resource> xmlfiles = filter(list.iterator(), FILENAMEFILTER);
-        while (xmlfiles.hasNext()) {
-            loadResource(xmlfiles.next());
-        }
-    }
-
-    private void loadResource(Resource resource) {
+    private @Nullable RepositoryInfo loadInfo(Resource resource) {
         try {
             RepositoryInfo info = load(resource);
-            cache.put(info.getId(), info);
+            return info;
         } catch (IOException e) {
             // log the bad info
             LOGGER.log(Level.WARNING, "Error loading RepositoryInfo", e);
         }
+        return null;
     }
 
     private void repositoryInfoChanged(String repoId) {
@@ -260,7 +237,25 @@ public class ConfigStore {
      * <data-dir>/geogig/config/repos/}; any xml file that can't be parsed is ignored.
      */
     public List<RepositoryInfo> getRepositories() {
-        return newArrayList(cache.values());
+        lock.readLock().lock();
+        try {
+            Resource configRoot = getConfigRoot();
+            List<Resource> resources = configRoot.list();
+            if (null == resources) {
+                return Collections.emptyList();
+            }
+            Iterator<Resource> xmlfiles = filter(resources.iterator(), FILENAMEFILTER);
+            List<RepositoryInfo> infos = new ArrayList<>(resources.size());
+            xmlfiles.forEachRemaining((res) -> {
+                RepositoryInfo info = loadInfo(res);
+                if (info != null) {
+                    infos.add(info);
+                }
+            });
+            return infos;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
@@ -320,7 +315,8 @@ public class ConfigStore {
         checkIdFormat(id);
         lock.readLock().lock();
         try {
-            RepositoryInfo info = cache.get(id);
+            Resource resource = resource(id);
+            RepositoryInfo info = resource == null ? null : loadInfo(resource);
             if (info == null) {
                 throw new FileNotFoundException("Repository not found: " + id);
             }
@@ -331,18 +327,20 @@ public class ConfigStore {
     }
 
     public RepositoryInfo getByName(final String name) {
-        for (RepositoryInfo cached : cache.values()) {
-            if (cached.getRepoName().equals(name)) {
-                return cached;
+        List<RepositoryInfo> infos = getRepositories();
+        for (RepositoryInfo info : infos) {
+            if (info.getRepoName().equals(name)) {
+                return info;
             }
         }
         return null;
     }
 
     public RepositoryInfo getByLocation(final URI location) {
-        for (RepositoryInfo cached : cache.values()) {
-            if (cached.getLocation().equals(location)) {
-                return cached;
+        List<RepositoryInfo> infos = getRepositories();
+        for (RepositoryInfo info : infos) {
+            if (info.getLocation().equals(location)) {
+                return info;
             }
         }
         return null;
@@ -380,8 +378,4 @@ public class ConfigStore {
             return input.name().endsWith(".xml");
         }
     };
-
-    public static abstract class RepositoryInfoChangedCallback {
-        public abstract void repositoryInfoChanged(String repoId);
-    }
 }
