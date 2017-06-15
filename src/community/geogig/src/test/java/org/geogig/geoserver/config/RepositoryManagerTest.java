@@ -77,7 +77,7 @@ public class RepositoryManagerTest extends GeoServerSystemTestSupport {
     @Test
     public void testGet() {
         assertNotNull(repoManager);
-        RepositoryManager repoManager2 = RepositoryManager.supplier().get();
+        RepositoryManager repoManager2 = RepositoryManager.get();
         assertNotNull(repoManager2);
         assertEquals(repoManager, repoManager2);
     }
@@ -437,6 +437,7 @@ public class RepositoryManagerTest extends GeoServerSystemTestSupport {
             repoManager.getRepository(info.getId());
             fail();
         } catch (Exception e) {
+            e.printStackTrace();
             //expected
             assertTrue(e.getMessage().contains("No repository with ID " + info.getId() + " exists"));
         }

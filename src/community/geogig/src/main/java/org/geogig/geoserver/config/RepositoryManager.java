@@ -58,7 +58,6 @@ import com.google.common.base.Objects;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
-import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 
@@ -67,15 +66,6 @@ public class RepositoryManager implements GeoServerInitializer {
         if (GlobalContextBuilder.builder() == null
                 || GlobalContextBuilder.builder().getClass().equals(ContextBuilder.class)) {
             GlobalContextBuilder.builder(new GeoServerContextBuilder());
-        }
-    }
-
-    private static class StaticSupplier implements Supplier<RepositoryManager>, Serializable {
-        private static final long serialVersionUID = 3706728433275296134L;
-
-        @Override
-        public RepositoryManager get() {
-            return RepositoryManager.get();
         }
     }
 
@@ -91,12 +81,10 @@ public class RepositoryManager implements GeoServerInitializer {
 
     private static final String REPO_ROOT = "geogig/repos";
 
-    private static final RepositoryInfoChangedCallback REPO_CHANGED_CALLBACK = new RepositoryInfoChangedCallback() {
+    private final RepositoryInfoChangedCallback REPO_CHANGED_CALLBACK = new RepositoryInfoChangedCallback() {
         @Override
         public void repositoryInfoChanged(String repoId) {
-            if (INSTANCE != null && INSTANCE.repoCache != null) {
-                INSTANCE.repoCache.invalidate(repoId);
-            }
+            repoCache.invalidate(repoId);
         }
     };
 
@@ -108,16 +96,16 @@ public class RepositoryManager implements GeoServerInitializer {
         return INSTANCE;
     }
 
-    public static void close() {
-        if (INSTANCE != null) {
-            INSTANCE.configStore.removeRepositoryInfoChangedCallback(REPO_CHANGED_CALLBACK);
-            INSTANCE.repoCache.invalidateAll();
-            INSTANCE = null;
-        }
+    public void dispose() {
+        configStore.removeRepositoryInfoChangedCallback(REPO_CHANGED_CALLBACK);
+        repoCache.invalidateAll();
     }
 
-    public static Supplier<RepositoryManager> supplier() {
-        return new StaticSupplier();
+    public synchronized static void close() {
+        if (INSTANCE != null) {
+            INSTANCE.dispose();
+            INSTANCE = null;
+        }
     }
 
     public RepositoryManager(ConfigStore configStore, ResourceStore resourceStore) {
@@ -153,8 +141,10 @@ public class RepositoryManager implements GeoServerInitializer {
         } else {
             // no location set yet, generate one
             // NOTE: If the resource store does not support a file system, the repository will be
-            // created in a temporary directory. If this is the case, remove any repository
-            // resolvers that can resolve a 'file' URI to prevent the creation of such repos.
+            // created
+            // in a temporary directory. If this is the case, remove any repository resolvers that
+            // can
+            // resolve a 'file' URI to prevent the creation of such repos.
             Resource root = resourceStore.get(REPO_ROOT);
             File repoDir = root.get(UUID.randomUUID().toString()).dir();
             if (!repoDir.exists()) {
