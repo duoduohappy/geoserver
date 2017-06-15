@@ -111,7 +111,6 @@ public class RepositoryManager implements GeoServerInitializer {
         this.resourceStore = resourceStore;
         this.repoCache = new RepositoryCache(this);
         this.configStore.addRepositoryInfoChangedCallback(REPO_CHANGED_CALLBACK);
-        this.configStore.setEventLock(this);
     }
 
     @Override

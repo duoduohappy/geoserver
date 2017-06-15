@@ -80,12 +80,6 @@ public class ConfigStore {
 
     private Queue<RepositoryInfoChangedCallback> callbacks;
 
-    private Object eventLock = null;
-
-    public void setEventLock(Object o) {
-        this.eventLock = o;
-    }
-
     /**
      * Map of cached {@link RepositoryInfo} instances key'ed by id
      */
@@ -117,25 +111,21 @@ public class ConfigStore {
                                 + ", on THREAD=" + Thread.currentThread().getName());
                         break;
                     case ENTRY_MODIFY:
-                        synchronized (eventLock) {
-                            System.out.println("ENTRY_MODIFY EVENT - " + event + ", on THREAD="
-                                    + Thread.currentThread().getName());
-                            cache.remove(repoId);
-                            loadResource(resourceLoader.get(path));
-                            System.out.println("ENTRY_MODIFY :: finished load - " + event
-                                    + ", on THREAD=" + Thread.currentThread().getName());
+                        System.out.println("ENTRY_MODIFY EVENT - " + event + ", on THREAD="
+                                + Thread.currentThread().getName());
+                        cache.remove(repoId);
+                        loadResource(resourceLoader.get(path));
+                        System.out.println("ENTRY_MODIFY :: finished load - " + event
+                                + ", on THREAD=" + Thread.currentThread().getName());
 
-                            repositoryInfoChanged(repoId);
-                        }
+                        repositoryInfoChanged(repoId);
                         break;
                     case ENTRY_DELETE:
-                        synchronized (eventLock) {
-                            System.out.println("ENTRY_DELETE EVENT - " + event + ", on THREAD="
-                                    + Thread.currentThread().getName());
-                            cache.remove(repoId);
-                            repositoryInfoChanged(repoId);
-                            break;
-                        }
+                        System.out.println("ENTRY_DELETE EVENT - " + event + ", on THREAD="
+                                + Thread.currentThread().getName());
+                        cache.remove(repoId);
+                        repositoryInfoChanged(repoId);
+                        break;
                     }
                     System.out.println("Finished processing - " + event + ", on THREAD="
                             + Thread.currentThread().getName());
