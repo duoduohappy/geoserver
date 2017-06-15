@@ -11,7 +11,6 @@ import static org.geoserver.catalog.Predicates.equal;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +54,6 @@ import com.google.common.base.Objects;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
-import com.google.common.base.Supplier;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 
@@ -67,17 +65,8 @@ public class RepositoryManager implements GeoServerInitializer {
         }
     }
 
-    private static class StaticSupplier implements Supplier<RepositoryManager>, Serializable {
-        private static final long serialVersionUID = 3706728433275296134L;
-
-        @Override
-        public RepositoryManager get() {
-            return RepositoryManager.get();
-        }
-    }
-
     private final ConfigStore configStore;
-    
+
     private final ResourceStore resourceStore;
 
     private final RepositoryCache repoCache;
@@ -85,16 +74,14 @@ public class RepositoryManager implements GeoServerInitializer {
     private static RepositoryManager INSTANCE;
 
     private Catalog catalog;
-    
+
     private static final String REPO_ROOT = "geogig/repos";
-    
-    private static final RepositoryInfoChangedCallback REPO_CHANGED_CALLBACK = new RepositoryInfoChangedCallback() {
-		@Override
-		public void repositoryInfoChanged(String repoId) {
-			if (INSTANCE != null && INSTANCE.repoCache != null) {
-				INSTANCE.repoCache.invalidate(repoId);
-			}
-		}
+
+    private final RepositoryInfoChangedCallback REPO_CHANGED_CALLBACK = new RepositoryInfoChangedCallback() {
+        @Override
+        public void repositoryInfoChanged(String repoId) {
+            repoCache.invalidate(repoId);
+        }
     };
 
     public static synchronized RepositoryManager get() {
@@ -105,16 +92,16 @@ public class RepositoryManager implements GeoServerInitializer {
         return INSTANCE;
     }
 
-    public static void close() {
-        if (INSTANCE != null) {
-        	INSTANCE.configStore.removeRepositoryInfoChangedCallback(REPO_CHANGED_CALLBACK);
-            INSTANCE.repoCache.invalidateAll();
-            INSTANCE = null;
-        }
+    public void dispose() {
+        configStore.removeRepositoryInfoChangedCallback(REPO_CHANGED_CALLBACK);
+        repoCache.invalidateAll();
     }
 
-    public static Supplier<RepositoryManager> supplier() {
-        return new StaticSupplier();
+    public synchronized static void close() {
+        if (INSTANCE != null) {
+            INSTANCE.dispose();
+            INSTANCE = null;
+        }
     }
 
     public RepositoryManager(ConfigStore configStore, ResourceStore resourceStore) {
@@ -150,13 +137,15 @@ public class RepositoryManager implements GeoServerInitializer {
             repoURI = URI.create(hints.get(Hints.REPOSITORY_URL).get().toString());
         } else {
             // no location set yet, generate one
-        	// NOTE: If the resource store does not support a file system, the repository will be created 
-        	// in a temporary directory.  If this is the case, remove any repository resolvers that can 
-        	// resolve a 'file' URI to prevent the creation of such repos.
+            // NOTE: If the resource store does not support a file system, the repository will be
+            // created
+            // in a temporary directory. If this is the case, remove any repository resolvers that
+            // can
+            // resolve a 'file' URI to prevent the creation of such repos.
             Resource root = resourceStore.get(REPO_ROOT);
             File repoDir = root.get(UUID.randomUUID().toString()).dir();
             if (!repoDir.exists()) {
-            	repoDir.mkdirs();
+                repoDir.mkdirs();
             }
             repoURI = repoDir.toURI().normalize();
             hints.set(Hints.REPOSITORY_URL, repoURI);
@@ -185,9 +174,9 @@ public class RepositoryManager implements GeoServerInitializer {
     }
 
     public RepositoryInfo getByRepoName(final String name) {
-    	RepositoryInfo info = configStore.getByName(name);
+        RepositoryInfo info = configStore.getByName(name);
         if (info != null) {
-        	return info;
+            return info;
         }
         // didn't find it
         throw new NoSuchElementException("No repository with ID " + name + " exists");
@@ -213,7 +202,8 @@ public class RepositoryManager implements GeoServerInitializer {
     private static List<DataStoreInfo> findGeoGigStores(Catalog catalog,
             org.opengis.filter.Filter filter) {
         List<DataStoreInfo> geogigStores;
-        try (CloseableIterator<DataStoreInfo> dataStores = catalog.list(DataStoreInfo.class, filter)) {
+        try (CloseableIterator<DataStoreInfo> dataStores = catalog.list(DataStoreInfo.class,
+                filter)) {
             geogigStores = Lists.newArrayList(dataStores);
         }
 
@@ -231,7 +221,8 @@ public class RepositoryManager implements GeoServerInitializer {
         Filter filter = equal("type", GeoGigDataStoreFactory.DISPLAY_NAME);
 
         String locationKey = "connectionParameters." + GeoGigDataStoreFactory.REPOSITORY.key;
-        filter = and(filter, equal(locationKey, GeoServerGeoGigRepositoryResolver.getURI(repoName)));
+        filter = and(filter,
+                equal(locationKey, GeoServerGeoGigRepositoryResolver.getURI(repoName)));
         List<DataStoreInfo> dependent;
         try (CloseableIterator<DataStoreInfo> stores = this.catalog.list(DataStoreInfo.class,
                 filter)) {
@@ -358,10 +349,10 @@ public class RepositoryManager implements GeoServerInitializer {
     }
 
     RepositoryInfo findOrCreateByLocation(final URI repositoryURI) {
-    	RepositoryInfo info = configStore.getByLocation(repositoryURI);
-    	if (info != null) {
-    		return info;
-    	}
+        RepositoryInfo info = configStore.getByLocation(repositoryURI);
+        if (info != null) {
+            return info;
+        }
         info = new RepositoryInfo();
         info.setLocation(repositoryURI);
         return save(info);
