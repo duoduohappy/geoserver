@@ -186,11 +186,24 @@ public class RepositoryManager implements GeoServerInitializer {
      *
      * @return a RepositoryInfo object, if found. If not found, returns null.
      */
-    public RepositoryInfo getByRepoName(final String name) {
+    public @Nullable RepositoryInfo getByRepoName(final String name) {
         RepositoryInfo info = configStore.getByName(name);
         return info;
     }
 
+    public @Nullable RepositoryInfo getByRepoLocation(final URI repoURI) {
+        RepositoryInfo info = configStore.getByLocation(repoURI);
+        return info;
+    }
+
+    public boolean repoExistsByName(final String name){
+        return configStore.repoExistsByName(name);
+    }
+    
+    public boolean repoExistsByLocation(URI location) {
+        return configStore.repoExistsByLocation(location);
+    }
+    
     public List<DataStoreInfo> findGeogigStores() {
         return findGeogigStores(this.catalog);
     }

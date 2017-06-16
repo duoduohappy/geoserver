@@ -326,7 +326,7 @@ public class ConfigStore {
         }
     }
 
-    public RepositoryInfo getByName(final String name) {
+    public @Nullable RepositoryInfo getByName(final String name) {
         List<RepositoryInfo> infos = getRepositories();
         for (RepositoryInfo info : infos) {
             if (info.getRepoName().equals(name)) {
@@ -336,7 +336,15 @@ public class ConfigStore {
         return null;
     }
 
-    public RepositoryInfo getByLocation(final URI location) {
+    public boolean repoExistsByName(String name) {
+        return null != getByName(name);
+    }
+
+    public boolean repoExistsByLocation(URI location) {
+        return null != getByLocation(location);
+    }
+
+    public @Nullable RepositoryInfo getByLocation(final URI location) {
         List<RepositoryInfo> infos = getRepositories();
         for (RepositoryInfo info : infos) {
             if (info.getLocation().equals(location)) {
