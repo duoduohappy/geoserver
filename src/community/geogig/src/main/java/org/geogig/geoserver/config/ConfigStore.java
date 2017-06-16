@@ -78,7 +78,7 @@ public class ConfigStore {
 
     private static final String CONFIG_DIR_NAME = "geogig/config/repos";
 
-    private ResourceStore resourceLoader;
+    private ResourceStore resourceStore;
 
     private final ReadWriteLock lock;
 
@@ -86,15 +86,16 @@ public class ConfigStore {
 
     public ConfigStore(ResourceStore resourceLoader) {
         checkNotNull(resourceLoader, "resourceLoader");
-        this.resourceLoader = resourceLoader;
+        this.resourceStore = resourceLoader;
         if (resourceLoader.get(CONFIG_DIR_NAME) == null) {
             throw new IllegalStateException("Unable to create config directory " + CONFIG_DIR_NAME);
         }
         this.lock = new ReentrantReadWriteLock();
         this.callbacks = new ConcurrentLinkedQueue<RepositoryInfoChangedCallback>();
 
-        ResourceNotificationDispatcher dispatcher = resourceLoader
-                .getResourceNotificationDispatcher();
+        ResourceNotificationDispatcher dispatcher;
+        dispatcher = resourceLoader.getResourceNotificationDispatcher();
+
         dispatcher.addListener(CONFIG_DIR_NAME, new ResourceListener() {
             @Override
             public void changed(ResourceNotification notify) {
@@ -197,12 +198,12 @@ public class ConfigStore {
     }
 
     private Resource resource(String id) {
-        Resource resource = resourceLoader.get(path(id));
+        Resource resource = resourceStore.get(path(id));
         return resource;
     }
 
     public Resource getConfigRoot() {
-        return resourceLoader.get(CONFIG_DIR_NAME);
+        return resourceStore.get(CONFIG_DIR_NAME);
     }
 
     static String path(String infoId) {
@@ -219,7 +220,7 @@ public class ConfigStore {
         try {
             RepositoryInfo info = load(resource);
             return info;
-        } catch (IOException e) {
+        } catch (Exception e) {
             // log the bad info
             LOGGER.log(Level.WARNING, "Error loading RepositoryInfo", e);
         }
@@ -272,7 +273,7 @@ public class ConfigStore {
     }
 
     private Resource whitelistResource() {
-        return resourceLoader.get("geogig/config/whitelist.xml");
+        return resourceStore.get("geogig/config/whitelist.xml");
     }
 
     private static List<WhitelistRule> loadWhitelist(Resource input) throws IOException {
@@ -354,29 +355,35 @@ public class ConfigStore {
         return null;
     }
 
-    private static RepositoryInfo load(Resource input) throws IOException {
-        Resource parent = input.parent();
-        if (!(parent.getType().equals(Resource.Type.DIRECTORY)
-                && input.getType().equals(Resource.Type.RESOURCE))) {
-            throw new FileNotFoundException("File not found: " + input.path());
-        }
+    private static RepositoryInfo load(Resource input) {
         RepositoryInfo info;
         try (Reader reader = new InputStreamReader(input.in(), Charsets.UTF_8)) {
             info = (RepositoryInfo) getConfigredXstream().fromXML(reader);
         } catch (Exception e) {
+            // the contract for Resource.in() is not clear on what to expect but both the FileSystem
+            // and Redis implementations throw IllegalStateException for well known causes like
+            // resource not existing or being a directory.
+            Throwables.propagateIfInstanceOf(e, IllegalStateException.class);
             String msg = "Unable to load repo config " + input.name();
             LOGGER.log(Level.WARNING, msg, e);
-            throw new IOException(msg, e);
+            throw Throwables.propagate(e);
         }
         if (info.getLocation() == null) {
-            throw new IOException("Repository info has incomplete information: " + info);
+            throw new IllegalStateException("Repository info has incomplete information: " + info);
         }
         return info;
     }
 
-    private static XStream getConfigredXstream() {
-        XStream xStream = new XStream();
+    /**
+     * According to http://x-stream.github.io/faq.html#Scalability_Thread_safety, XStream instances
+     * are thread safe and it's recommended to share them as they're pretty expensive to create
+     */
+    private static final XStream xStream = new XStream();
+    static {
         xStream.alias("RepositoryInfo", RepositoryInfo.class);
+    }
+
+    private static XStream getConfigredXstream() {
         return xStream;
     }
 
