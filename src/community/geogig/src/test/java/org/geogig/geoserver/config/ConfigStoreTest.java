@@ -11,14 +11,13 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.net.URI;
 import java.util.HashSet;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
@@ -135,7 +134,7 @@ public class ConfigStoreTest {
         try {
             store.get(dummyId);
             fail("Expected FileNotFoundException");
-        } catch (FileNotFoundException e) {
+        } catch (NoSuchElementException e) {
             assertTrue(e.getMessage().startsWith("Repository not found: "));
         }
 
@@ -156,7 +155,7 @@ public class ConfigStoreTest {
         String path = ConfigStore.path(dummyId);
         Resource resource = dataDir.get(path);
         try (OutputStream out = resource.out()) {
-        	out.write(expected.getBytes(Charsets.UTF_8));
+            out.write(expected.getBytes(Charsets.UTF_8));
         }
 
         RepositoryInfo info = store.get(dummyId);
@@ -177,7 +176,7 @@ public class ConfigStoreTest {
         String path = ConfigStore.path(dummyId);
         Resource resource = dataDir.get(path);
         try (OutputStream out = resource.out()) {
-        	out.write(expected.getBytes(Charsets.UTF_8));
+            out.write(expected.getBytes(Charsets.UTF_8));
         }
 
         RepositoryInfo info = store.get(dummyId);
@@ -199,10 +198,10 @@ public class ConfigStoreTest {
         String path = ConfigStore.path(dummyId);
         Resource resource = dataDir.get(path);
         try (OutputStream out = resource.out()) {
-        	out.write(expected.getBytes(Charsets.UTF_8));
+            out.write(expected.getBytes(Charsets.UTF_8));
         }
-        thrown.expect(FileNotFoundException.class);
-        thrown.expectMessage("Repository not found: " + dummyId);
+        thrown.expect(NoSuchElementException.class);
+        thrown.expectMessage("Unable to load repo config " + dummyId);
         store.get(dummyId);
     }
 
@@ -238,7 +237,7 @@ public class ConfigStoreTest {
         byte[] from = new byte[bytes.length - 5];
         System.arraycopy(bytes, 0, from, 0, from.length);
         try (OutputStream out = breakIt.out()) {
-        	out.write(from);
+            out.write(from);
         }
 
         List<RepositoryInfo> all = store.getRepositories();
@@ -260,12 +259,12 @@ public class ConfigStoreTest {
         String path = ConfigStore.path(dummyId);
         Resource resource = dataDir.get(path);
         try (OutputStream out = resource.out()) {
-        	out.write(expected.getBytes(Charsets.UTF_8));
+            out.write(expected.getBytes(Charsets.UTF_8));
         }
 
         assertNotNull(store.get(dummyId));
         assertTrue(store.delete(dummyId));
-        thrown.expect(FileNotFoundException.class);
+        thrown.expect(NoSuchElementException.class);
         assertNull(store.get(dummyId));
     }
 

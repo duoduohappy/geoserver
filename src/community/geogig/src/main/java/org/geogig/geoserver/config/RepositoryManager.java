@@ -9,7 +9,6 @@ import static org.geoserver.catalog.Predicates.and;
 import static org.geoserver.catalog.Predicates.equal;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
@@ -171,12 +170,8 @@ public class RepositoryManager implements GeoServerInitializer {
         return repository;
     }
 
-    public RepositoryInfo get(final String repoId) throws IOException {
-        try {
-            return configStore.get(repoId);
-        } catch (FileNotFoundException e) {
-            throw new NoSuchElementException("No repository with ID " + repoId + " exists");
-        }
+    public RepositoryInfo get(final String repoId) throws NoSuchElementException {
+        return configStore.get(repoId);
     }
 
     /**
@@ -196,14 +191,14 @@ public class RepositoryManager implements GeoServerInitializer {
         return info;
     }
 
-    public boolean repoExistsByName(final String name){
+    public boolean repoExistsByName(final String name) {
         return configStore.repoExistsByName(name);
     }
-    
+
     public boolean repoExistsByLocation(URI location) {
         return configStore.repoExistsByLocation(location);
     }
-    
+
     public List<DataStoreInfo> findGeogigStores() {
         return findGeogigStores(this.catalog);
     }
@@ -237,7 +232,7 @@ public class RepositoryManager implements GeoServerInitializer {
         String repoName = null;
         try {
             repoName = this.get(repoId).getRepoName();
-        } catch (IOException ioe) {
+        } catch (NoSuchElementException ioe) {
             Throwables.propagate(ioe);
         }
         Filter filter = equal("type", GeoGigDataStoreFactory.DISPLAY_NAME);
@@ -315,13 +310,8 @@ public class RepositoryManager implements GeoServerInitializer {
             create(info);
         } else {
             // see if the name has changed. If so, update the repo config
-            try {
-                RepositoryInfo currentInfo = get(info.getId());
-                handleRepoRename(currentInfo, info);
-            } catch (IOException ioe) {
-
-            }
-
+            RepositoryInfo currentInfo = get(info.getId());
+            handleRepoRename(currentInfo, info);
         }
         // so far we don't need to invalidate the GeoGIG instance from the cache here... re-evaluate
         // if any configuration option would require so in the future

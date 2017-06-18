@@ -6,28 +6,31 @@ package org.geogig.geoserver.config;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.collect.Iterators.filter;
 import static com.google.common.collect.Lists.newArrayList;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.Nullable;
 import org.geoserver.platform.resource.Paths;
@@ -40,7 +43,6 @@ import org.geoserver.platform.resource.ResourceStore;
 import org.geotools.util.logging.Logging;
 
 import com.google.common.base.Charsets;
-import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.thoughtworks.xstream.XStream;
 
@@ -66,6 +68,8 @@ public class ConfigStore {
 
     private static final Logger LOGGER = Logging.getLogger(ConfigStore.class);
 
+    private static final Predicate<Resource> FILENAMEFILTER = (res) -> res.name().endsWith(".xml");
+
     public static interface RepositoryInfoChangedCallback {
         public void repositoryInfoChanged(String repoId);
     }
@@ -84,6 +88,8 @@ public class ConfigStore {
 
     private Queue<RepositoryInfoChangedCallback> callbacks;
 
+    private ConcurrentMap<String, RepositoryInfo> infosById = new ConcurrentHashMap<>();
+
     public ConfigStore(ResourceStore resourceLoader) {
         checkNotNull(resourceLoader, "resourceLoader");
         this.resourceStore = resourceLoader;
@@ -92,6 +98,7 @@ public class ConfigStore {
         }
         this.lock = new ReentrantReadWriteLock();
         this.callbacks = new ConcurrentLinkedQueue<RepositoryInfoChangedCallback>();
+        preload();
 
         ResourceNotificationDispatcher dispatcher;
         dispatcher = resourceLoader.getResourceNotificationDispatcher();
@@ -100,23 +107,39 @@ public class ConfigStore {
             @Override
             public void changed(ResourceNotification notify) {
                 for (Event event : notify.events()) {
-                    String path = event.getPath().startsWith(CONFIG_DIR_NAME) ? event.getPath()
-                            : CONFIG_DIR_NAME + "/" + event.getPath();
-                    String repoId = idFromPath(path);
+                    final String repoId;
+                    {
+                        final String path = event.getPath().startsWith(CONFIG_DIR_NAME)
+                                ? event.getPath() : CONFIG_DIR_NAME + "/" + event.getPath();
+                        repoId = idFromPath(path);
+                    }
                     switch (event.getKind()) {
-                    case ENTRY_CREATE:
-                        // do nothing - likely nothing to process
-                        System.out.println("**IGNORING** ENTRY_CREATE EVENT - " + event
-                                + ", on THREAD=" + Thread.currentThread().getName());
+                    case ENTRY_CREATE: {
+                        // ResourceStore may issue entry_create before or after the contents where
+                        // written, but it'll always issue an entry_modify event just after the
+                        // contents are written, so we ignore the create events and wait for the
+                        // modify events to avoid double processing
+                        LOGGER.fine("Received an ENTRY_CREATE event for repo id " + repoId
+                                + " Event ignored, waiting for the ENTRY_MODIFY event to process it");
                         break;
-                    case ENTRY_MODIFY:
-                        System.out.println("ENTRY_MODIFY EVENT - " + event + ", on THREAD="
+                    }
+                    case ENTRY_MODIFY: {
+                        LOGGER.info("ENTRY_MODIFY EVENT - " + event + ", on THREAD="
                                 + Thread.currentThread().getName());
+                        try {
+                            get(repoId);
+                        } catch (NoSuchElementException e) {
+                            // ignore, exception already logged by get(), but call
+                            // repositoryInfoChanged for
+                            // RepositoryManager to close the live Repository
+                        }
                         repositoryInfoChanged(repoId);
                         break;
+                    }
                     case ENTRY_DELETE:
-                        System.out.println("ENTRY_DELETE EVENT - " + event + ", on THREAD="
+                        LOGGER.info("ENTRY_DELETE EVENT - " + event + ", on THREAD="
                                 + Thread.currentThread().getName());
+                        infosById.remove(repoId);
                         repositoryInfoChanged(repoId);
                         break;
                     }
@@ -153,16 +176,24 @@ public class ConfigStore {
      * xml file is replaced meaning it has been modified.
      * 
      * @return {@code info}, possibly with its id set if it was {@code null}
-     * 
+     * @implNote this method saves the {@link RepositoryInfo} to the internal cache, setting its
+     *           {@link RepositoryInfo#getLastModified() timestamp} to {@code -1}, meaning it was
+     *           just saved on this node. The resourcestore event listener will not reload it but
+     *           just update its timestamp, while on other nodes it'll load/reload it as needed.
+     *           This ensures on this node the {@link RepositoryInfo} will be available right after
+     *           this method returns, regardless of how long it takes the resource store event
+     *           dispatcher to notify this or other nodes.
      */
     public RepositoryInfo save(RepositoryInfo info) {
         checkNotNull(info, "null RepositoryInfo");
         ensureIdPresent(info);
         checkNotNull(info.getLocation(), "null location URI: %s", info);
 
-        lock.writeLock().lock();
         Resource resource = resource(info.getId());
+        lock.writeLock().lock();
         try (OutputStream out = resource.out()) {
+            info.setLastModified(-1L);// meaning just saved on this node
+            infosById.put(info.getId(), info);
             getConfigredXstream().toXML(info, new OutputStreamWriter(out, Charsets.UTF_8));
         } catch (IOException e) {
             throw Throwables.propagate(e);
@@ -177,6 +208,7 @@ public class ConfigStore {
         checkIdFormat(id);
         lock.writeLock().lock();
         try {
+            infosById.remove(id);
             return resource(id).delete();
         } finally {
             lock.writeLock().unlock();
@@ -213,18 +245,29 @@ public class ConfigStore {
     static String idFromPath(String path) {
         List<String> names = Paths.names(path);
         String resourceName = names.get(names.size() - 1);
-        return resourceName.substring(0, resourceName.length() - 4);
+        return resourceName.substring(0, resourceName.length() - ".xml".length());
     }
 
-    private @Nullable RepositoryInfo loadInfo(Resource resource) {
-        try {
-            RepositoryInfo info = load(resource);
-            return info;
+    private RepositoryInfo loadInfo(Resource resource) throws IllegalStateException {
+        RepositoryInfo info;
+        try (Reader reader = new InputStreamReader(resource.in(), Charsets.UTF_8)) {
+            info = (RepositoryInfo) getConfigredXstream().fromXML(reader);
+            if (info.getLocation() == null) {
+                throw new IllegalStateException(
+                        "Repository info has incomplete information: " + info);
+            }
+            info.setLastModified(resource.lastmodified());
         } catch (Exception e) {
-            // log the bad info
-            LOGGER.log(Level.WARNING, "Error loading RepositoryInfo", e);
+            // the contract for Resource.in() is not clear on what to expect but both the
+            // FileSystem
+            // and Redis implementations throw IllegalStateException for well known causes like
+            // resource not existing or being a directory.
+            Throwables.propagateIfInstanceOf(e, IllegalStateException.class);
+            String msg = "Unable to load repo config " + resource.name();
+            LOGGER.log(Level.WARNING, msg, e);
+            throw new IllegalStateException(msg, e);
         }
-        return null;
+        return info;
     }
 
     private void repositoryInfoChanged(String repoId) {
@@ -240,23 +283,46 @@ public class ConfigStore {
     public List<RepositoryInfo> getRepositories() {
         lock.readLock().lock();
         try {
-            Resource configRoot = getConfigRoot();
-            List<Resource> resources = configRoot.list();
-            if (null == resources) {
-                return Collections.emptyList();
-            }
-            Iterator<Resource> xmlfiles = filter(resources.iterator(), FILENAMEFILTER);
-            List<RepositoryInfo> infos = new ArrayList<>(resources.size());
-            xmlfiles.forEachRemaining((res) -> {
-                RepositoryInfo info = loadInfo(res);
-                if (info != null) {
-                    infos.add(info);
-                }
-            });
-            return infos;
+            // deferr to get(id) to ensure we get the most current version of the infos
+            List<RepositoryInfo> currentInfos;
+            currentInfos = infosById.keySet().parallelStream().map((id) -> getNoExceptions(id))
+                    .filter(Objects::nonNull).collect(Collectors.toList());
+            return currentInfos;
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    private void preload() {
+        List<RepositoryInfo> repos = loadRepositories();
+        repos.forEach((info) -> infosById.put(info.getId(), info));
+    }
+
+    /**
+     * Loads and returns all {@link RepositoryInfo}s directly from the {@link ResourceStore}
+     */
+    private List<RepositoryInfo> loadRepositories() {
+        Resource configRoot = getConfigRoot();
+        List<Resource> resources = configRoot.list();
+        if (null == resources || resources.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<RepositoryInfo> infos = resources//
+                .parallelStream()//
+                .filter(FILENAMEFILTER)//
+                .map((res) -> {
+                    try {
+                        return loadInfo(res);
+                    } catch (RuntimeException e) {
+                        LOGGER.log(Level.INFO, "Ignoring malformed resource", e);
+                    }
+                    return null;
+                })//
+                .filter(Objects::nonNull)//
+                .collect(Collectors.toList());
+
+        return infos;
     }
 
     /**
@@ -310,68 +376,87 @@ public class ConfigStore {
     /**
      * Loads a {@link RepositoryInfo} by {@link RepositoryInfo#getId() id} from its xml file under
      * {@code <data-dir>/geogig/config/repos/}
+     * 
+     * @implNote Ensures to return the most current version of the {@link RepositoryInfo} by
+     *           comparing its {@link RepositoryInfo#getLastModified()} with the
+     *           {@link Resource#lastmodified()}, and reloading in case it was cached but the
+     *           timestamps don't match
      */
-    public RepositoryInfo get(final String id) throws IOException {
+    public RepositoryInfo get(final String id) throws NoSuchElementException {
         checkNotNull(id, "provided a null id");
         checkIdFormat(id);
         lock.readLock().lock();
         try {
             Resource resource = resource(id);
-            RepositoryInfo info = resource == null ? null : loadInfo(resource);
-            if (info == null) {
-                throw new FileNotFoundException("Repository not found: " + id);
+            final @Nullable RepositoryInfo cached = infosById.get(id);
+            final long currentTimeStamp = resource.lastmodified();
+            final long cachedTimestamp = cached == null ? Long.MIN_VALUE : cached.getLastModified();
+            RepositoryInfo info;
+            if (currentTimeStamp != cachedTimestamp) {
+                if (0L == currentTimeStamp) {
+                    throw new NoSuchElementException("Repository not found: " + id);
+                } else {
+                    if (-1L == cachedTimestamp) {
+                        cached.setLastModified(currentTimeStamp);
+                        info = cached;
+                    } else {
+                        info = loadInfo(resource);
+                        infosById.put(info.getId(), info);
+                    }
+                }
+            } else {
+                info = cached;
             }
             return info;
+        } catch (RuntimeException e) {
+            Throwables.propagateIfInstanceOf(e, NoSuchElementException.class);
+            NoSuchElementException nse = new NoSuchElementException(e.getMessage());
+            nse.initCause(e);
+            throw nse;
         } finally {
             lock.readLock().unlock();
         }
     }
 
-    public @Nullable RepositoryInfo getByName(final String name) {
-        List<RepositoryInfo> infos = getRepositories();
-        for (RepositoryInfo info : infos) {
-            if (info.getRepoName().equals(name)) {
-                return info;
-            }
+    private @Nullable RepositoryInfo getNoExceptions(final String id) {
+        try {
+            return get(id);
+        } catch (RuntimeException e) {
+            LOGGER.log(Level.FINE, "Ignoring event", e);
         }
         return null;
+    }
+
+    public @Nullable RepositoryInfo getByName(final String name) {
+        checkNotNull(name);
+        Optional<RepositoryInfo> match = infosById.values().parallelStream()
+                .filter((info) -> name.equals(info.getRepoName())).findFirst();
+
+        return match.isPresent() ? getNoExceptions(match.get().getId()) : null;
     }
 
     public boolean repoExistsByName(String name) {
-        return null != getByName(name);
-    }
+        checkNotNull(name);
+        Optional<RepositoryInfo> match = infosById.values().parallelStream()
+                .filter((info) -> name.equals(info.getRepoName())).findFirst();
 
-    public boolean repoExistsByLocation(URI location) {
-        return null != getByLocation(location);
+        return match.isPresent();
     }
 
     public @Nullable RepositoryInfo getByLocation(final URI location) {
-        List<RepositoryInfo> infos = getRepositories();
-        for (RepositoryInfo info : infos) {
-            if (info.getLocation().equals(location)) {
-                return info;
-            }
-        }
-        return null;
+        checkNotNull(location);
+        Optional<RepositoryInfo> match = infosById.values().parallelStream()
+                .filter((info) -> location.equals(info.getLocation())).findFirst();
+
+        return match.isPresent() ? getNoExceptions(match.get().getId()) : null;
     }
 
-    private static RepositoryInfo load(Resource input) {
-        RepositoryInfo info;
-        try (Reader reader = new InputStreamReader(input.in(), Charsets.UTF_8)) {
-            info = (RepositoryInfo) getConfigredXstream().fromXML(reader);
-        } catch (Exception e) {
-            // the contract for Resource.in() is not clear on what to expect but both the FileSystem
-            // and Redis implementations throw IllegalStateException for well known causes like
-            // resource not existing or being a directory.
-            Throwables.propagateIfInstanceOf(e, IllegalStateException.class);
-            String msg = "Unable to load repo config " + input.name();
-            LOGGER.log(Level.WARNING, msg, e);
-            throw Throwables.propagate(e);
-        }
-        if (info.getLocation() == null) {
-            throw new IllegalStateException("Repository info has incomplete information: " + info);
-        }
-        return info;
+    public boolean repoExistsByLocation(URI location) {
+        checkNotNull(location);
+        Optional<RepositoryInfo> match = infosById.values().parallelStream()
+                .filter((info) -> location.equals(info.getLocation())).findFirst();
+
+        return match.isPresent();
     }
 
     /**
@@ -386,11 +471,4 @@ public class ConfigStore {
     private static XStream getConfigredXstream() {
         return xStream;
     }
-
-    private static final Predicate<Resource> FILENAMEFILTER = new Predicate<Resource>() {
-        @Override
-        public boolean apply(Resource input) {
-            return input.name().endsWith(".xml");
-        }
-    };
 }

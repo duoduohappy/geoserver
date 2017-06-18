@@ -44,6 +44,8 @@ public class RepositoryInfo implements Serializable {
      */
     private transient String repoName;
 
+    private transient long lastModified;
+    
     public RepositoryInfo() {
         this(null);
     }
@@ -132,5 +134,13 @@ public class RepositoryInfo implements Serializable {
     public String toString() {
         return new StringBuilder("[id:").append(getId()).append(", URI:").append(getLocation())
                 .append("]").toString();
+    }
+    
+    long getLastModified(){
+        return lastModified;
+    }
+    
+    void setLastModified(long timestamp){
+        this.lastModified = timestamp;
     }
 }

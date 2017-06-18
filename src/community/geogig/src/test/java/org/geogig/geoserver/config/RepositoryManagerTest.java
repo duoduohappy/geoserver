@@ -137,7 +137,7 @@ public class RepositoryManagerTest extends GeoServerSystemTestSupport {
             fail();
         } catch (NoSuchElementException e) {
             // expected;
-            assertEquals("No repository with ID " + randomUUID + " exists", e.getMessage());
+            assertEquals("Repository not found: " + randomUUID, e.getMessage());
         }
 
         info1Get = repoManager.getByRepoName("repo1");
@@ -439,7 +439,7 @@ public class RepositoryManagerTest extends GeoServerSystemTestSupport {
         } catch (Exception e) {
             e.printStackTrace();
             //expected
-            assertTrue(e.getMessage().contains("No repository with ID " + info.getId() + " exists"));
+            assertTrue(e.getMessage().contains("Repository not found: " + info.getId()));
         }
         
         geogigDataStores = repoManager.findGeogigStores();
