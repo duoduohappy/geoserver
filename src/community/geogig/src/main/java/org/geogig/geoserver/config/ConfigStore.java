@@ -44,6 +44,7 @@ import org.geotools.util.logging.Logging;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.thoughtworks.xstream.XStream;
 
 /**
@@ -283,11 +284,7 @@ public class ConfigStore {
     public List<RepositoryInfo> getRepositories() {
         lock.readLock().lock();
         try {
-            // deferr to get(id) to ensure we get the most current version of the infos
-            List<RepositoryInfo> currentInfos;
-            currentInfos = infosById.keySet().parallelStream().map((id) -> getNoExceptions(id))
-                    .filter(Objects::nonNull).collect(Collectors.toList());
-            return currentInfos;
+            return ImmutableList.copyOf(infosById.values());
         } finally {
             lock.readLock().unlock();
         }
@@ -400,8 +397,13 @@ public class ConfigStore {
                         cached.setLastModified(currentTimeStamp);
                         info = cached;
                     } else {
-                        info = loadInfo(resource);
-                        infosById.put(info.getId(), info);
+                        try {
+                            info = loadInfo(resource);
+                            infosById.put(info.getId(), info);
+                        } catch (IllegalStateException failed) {
+                            infosById.remove(id);
+                            throw failed;
+                        }
                     }
                 }
             } else {
@@ -418,21 +420,12 @@ public class ConfigStore {
         }
     }
 
-    private @Nullable RepositoryInfo getNoExceptions(final String id) {
-        try {
-            return get(id);
-        } catch (RuntimeException e) {
-            LOGGER.log(Level.FINE, "Ignoring event", e);
-        }
-        return null;
-    }
-
     public @Nullable RepositoryInfo getByName(final String name) {
         checkNotNull(name);
         Optional<RepositoryInfo> match = infosById.values().parallelStream()
                 .filter((info) -> name.equals(info.getRepoName())).findFirst();
 
-        return match.isPresent() ? getNoExceptions(match.get().getId()) : null;
+        return match.orElse(null);
     }
 
     public boolean repoExistsByName(String name) {
@@ -448,7 +441,7 @@ public class ConfigStore {
         Optional<RepositoryInfo> match = infosById.values().parallelStream()
                 .filter((info) -> location.equals(info.getLocation())).findFirst();
 
-        return match.isPresent() ? getNoExceptions(match.get().getId()) : null;
+        return match.orElse(null);
     }
 
     public boolean repoExistsByLocation(URI location) {
