@@ -45,6 +45,15 @@
             <include>gt-geopkg-*.jar</include>
             <!-- JSONP (JSR-353) libs -->
             <include>javax.json-*.jar</include>
+
+            <!-- geogig-grpc-client deps -->
+            <include>grpc-*.jar</include>
+            <include>error_prone_annotations*.jar</include>
+            <include>instrumentation-api*.jar</include>
+            <include>netty-*.jar</include>
+            <include>protobuf-*.jar</include>
+            <include>*.jar</include>
+
         </includes>
         <excludes>
             <exclude>*test*</exclude>
